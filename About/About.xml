@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ModMetaData>
+  <packageId>kalas.wealthreadout</packageId>
+  <name>Wealth Readout</name>
+  <author>kalas</author>
+  <modVersion>1.0.0</modVersion>
+  <!-- 1.6 only, and LoadFolders.xml must say the same. supportedVersions is what actually gates
+       loading; claiming a version this mod has never been run on is worse than not claiming it. -->
+  <supportedVersions>
+    <li>1.6</li>
+  </supportedVersions>
+  <description>Wealth drives raid difficulty, and finding out what is costing you means opening a window. This mod puts the answer where you are already looking.
+
+Hover any category or item in the resource readout at the top left of the screen. The tooltip tells you what it is worth in silver, what share of your colony's wealth that is, and how much of it is stored versus sitting elsewhere.
+
+The readout and the wealth system do not count the same things — the readout counts what is in your stockpiles, while wealth counts everything on the map including what is loose on the ground and carried by pawns. The tooltip reports true wealth, the number your storyteller actually reads, and shows the gap rather than hiding it.
+
+Tooltips only. Nothing is added to the panel, nothing moves, and nothing is resized. Safe to add to any save and safe to remove from any save: the mod writes nothing into your save file. Requires Harmony.</description>
+  <modDependencies>
+    <li>
+      <packageId>brrainz.harmony</packageId>
+      <displayName>Harmony</displayName>
+      <steamWorkshopUrl>steam://url/CommunityFilePage/2009463077</steamWorkshopUrl>
+      <downloadUrl>https://github.com/pardeike/HarmonyRimWorld/releases/latest</downloadUrl>
+    </li>
+  </modDependencies>
+  <loadAfter>
+    <li>brrainz.harmony</li>
+  </loadAfter>
+</ModMetaData>
