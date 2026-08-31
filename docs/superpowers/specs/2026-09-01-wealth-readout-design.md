@@ -44,14 +44,14 @@ Hovering any row replaces its tooltip with:
 ```
 Foods
 1,190 silver · 2.6% of colony wealth
-240 stored · 70 unstored
+240 stored · 70 elsewhere
 ```
 
 - **Categories sum their whole subtree.** Hovering `Foods` covers `Meals` covers `Simple meal`.
   Hovering a parent answers the parent's question.
 - **The share is of total colony wealth**, not of items — so it is never inflated, and a player
   sweeping rows that read 2–4% can see for themselves that most of their wealth is elsewhere.
-- **The stored/unstored line exists because the readout and wealth disagree** (see "The counting
+- **The stored/elsewhere line exists because the readout and wealth disagree** (see "The counting
   mismatch"). Naming the gap is better than letting the player notice it and stop trusting the
   number.
 
@@ -93,18 +93,40 @@ for (int i = 0; i < tmpThings.Count; i++)
 
 They diverge in two directions:
 
-1. **Unstored stock.** Steel dumped on the ground is wealth the readout does not count. This is why
-   the tooltip carries a stored/unstored split rather than a single number.
+1. **Stock outside storage.** Steel on the ground, in a pawn's inventory, in a caravan pack or inside
+   a container is wealth the readout does not count. This is why the tooltip carries a
+   stored/elsewhere split rather than a single number — and why the second word is **"elsewhere",
+   not "unstored"**. "Unstored" implies a pending hauling job; most of that remainder has none.
 2. **Whole classes of thing.** Weapons, apparel, art and furniture are not `CountAsResource` and have
    no row in the readout at all — in a mature colony, usually the majority of wealth.
 
 **Decision: the tooltip reports true wealth, not readout wealth.** The number must describe the
-wealth the storyteller actually reads, or acting on it does nothing. The stored/unstored line
+wealth the storyteller actually reads, or acting on it does nothing. The stored/elsewhere line
 reconciles it with the count printed beside it.
 
 **Decision: nothing is added to cover point 2.** A footer line summarising unlisted wealth was
 designed and dropped. The percentage already carries the honesty, since its denominator is total
 colony wealth. Dropping it also removed the design's worst correctness trap — see "Rejected".
+
+---
+
+## Constraints
+
+These are not preferences. A change that breaks either one is out of scope by definition, however
+good the feature is. Both are recorded with their reasoning in `HANDOVER.md`.
+
+**1. Zero save footprint.** The mod must be addable to and removable from any save at any time, with
+no warning, no version bump, and no corruption. Concretely: **no defs, no `GameComponent`, no
+`MapComponent`, nothing scribed, no `ModSettings`.** The wealth index is a plain in-memory cache
+rebuilt on demand and discarded with the session. The mod is Harmony patches and nothing else.
+
+**2. Vanilla-shaped and minimal.** No divergence from vanilla behaviour, and the smallest patch
+surface that does the job. The mod changes tooltip *text*. It adds no rows, no windows, no UI
+elements, no keys; it moves nothing and resizes nothing; hover regions match vanilla's exactly. Four
+patches (two prefix/postfix pairs and one standalone postfix), no transpilers.
+
+Constraint 2 is also the best conflict posture available. Postfixes that only rewrite tooltip text
+let other readout mods patch the same methods without either mod breaking the other.
 
 ---
 
@@ -179,7 +201,7 @@ that is not on screen.
 The rebuild **mirrors `CalculateWealthItems` exactly**: `GetAllThingsRecursively` over
 `HaulableEver`, filtered by `WealthWatcher.WealthItemsFilter` (which is `public static` and must be
 reused, not reimplemented), skipping unspawned and fogged, summing `MarketValue * stackCount`. It
-buckets by `ThingDef` and splits stored from unstored.
+buckets by `ThingDef` and splits stored from elsewhere.
 
 > Deviating from that walk anywhere — a different request group, a hand-rolled filter, dropping the
 > fogged check — produces numbers that describe a wealth the storyteller does not use. The mod would
@@ -217,16 +239,18 @@ Consequences:
 - A paused game rebuilds nothing, because staleness is measured in ticks.
 - Sweeping down twenty rows costs one pass, not twenty.
 
-Default staleness interval: **1000 ticks**, configurable. `WealthWatcher` itself runs the same pass
+Staleness interval: **1000 ticks**, a constant. `WealthWatcher` itself runs the same pass
 every 5000, so this is roughly 5x vanilla's wealth cost — but only while the player is actually
 hovering. **This default is a guess and must be profiled on a large late-game map before release.**
 
-### Settings
+### No settings
 
-- Staleness interval (ticks).
-- Show the stored/unstored line (on by default).
+The mod has **no settings page and no `ModSettings` class**. Nothing is configurable, including the
+staleness interval, which is a constant.
 
-Anything further waits until the tooltip has been used in play.
+That is a deliberate cost: it means the staleness default cannot be worked around by a user with a
+400-mod list and a decade-old colony, so **profiling it is not optional** (risk 1). The alternative —
+a settings page — was rejected along with everything that would have gone on it. See "Rejected".
 
 ---
 
@@ -241,6 +265,30 @@ a further patch on `ResourceReadout.ResourceReadoutOnGUI`; a per-frame accumulat
 correctness trap, since **a `ThingDef` can belong to more than one `ThingCategoryDef`**, so naive
 root-level summing double-counts and makes the remainder too small. Dropping the footer deleted all
 three. Do not reintroduce it without solving the multi-category dedupe first.
+
+**A settings page, and everything proposed for it.** Considered and dropped whole. Each entry failed
+on its own terms, which is why the page had nothing left to hold:
+
+- *A percentage toggle.* One clause of text in a tooltip that only appears when the player asks for
+  it by hovering. No performance cost, no conflict surface. A setting that removes information the
+  user just requested is a setting nobody touches.
+- *A "count unstored" behaviour toggle.* **Rejected on principle, not on cost.** It would let the
+  player switch the number from true wealth to a figure that matches the row but does not match what
+  the storyteller reads — a setting whose purpose is to select a wrong answer. Every screenshot and
+  bug report would then be ambiguous about which mode produced it. If the mismatch reads badly, fix
+  the wording, never the counting.
+- *Raid-point impact, defaulted off.* The most actionable feature considered, and the one with a
+  concrete blocker. Threat points are not linear in wealth, so the only honest answer to "what does
+  Foods cost me in raid points" is to evaluate the real curve at current wealth and at wealth minus
+  that category, and difference them. But `StorytellerUtility.DefaultThreatPointsNow` reads wealth
+  via `map.PlayerWealthForStoryteller`, which is the cached `WealthWatcher` — differencing it means
+  temporarily substituting a fake wealth underneath the storyteller. That is an invasive hook into
+  the highest-churn code in the game, and it is precisely what the sibling **Perceived Wealth** mod
+  is built around. Reimplementing the curve instead guarantees drift from vanilla and from every
+  difficulty mod. Both routes break constraint 2. The feature belongs in a mod already paying that
+  cost.
+- *The staleness interval.* Would have been the one defensible entry, but it cannot justify a
+  settings page alone. It is a constant instead, which makes profiling it mandatory.
 
 **Per-zone numbers.** Considered before the target UI was correctly identified. Meaningless here: the
 resource readout is map-wide by construction.
@@ -271,9 +319,11 @@ surface. Explicitly not folded into this mod. If built, it belongs in its own re
 
 ## Risks and open items
 
-1. **The staleness default is unprofiled.** 1000 ticks is a guess. Measure the rebuild on a large
-   late-game map with a full stockpile before trusting it.
-2. **`IsInAnyStorage` and deep-storage mods.** The stored/unstored split depends on what counts as
+1. **The staleness constant is unprofiled, and there is no setting to escape it.** 1000 ticks is a
+   guess. Because the mod ships no settings page, a bad value cannot be worked around by the user —
+   it is a patch. Measure the rebuild on a large late-game map with a full stockpile before release.
+   This is the single highest-priority open item.
+2. **`IsInAnyStorage` and deep-storage mods.** The stored/elsewhere split depends on what counts as
    storage. Mods adding container buildings may make the split misleading. Check against at least one
    deep-storage mod.
 3. **Other readout mods patch the same methods.** Postfixes are friendlier than transpilers here, but
@@ -293,7 +343,7 @@ Numbers, not impressions. A tooltip that looks plausible and is wrong is the fai
 1. **Reconciliation.** On a running colony, the sum of our per-def index must equal
    `wealthWatcher.WealthItems` after a `ForceRecount` on the same tick. Any drift means the walk was
    not mirrored correctly.
-2. **Unstored detection.** Spawn a stack outside any stockpile; the row count must not move and the
+2. **Elsewhere detection.** Spawn a stack outside any stockpile; the row count must not move and the
    tooltip's unstored figure must.
 3. **Category summing.** A parent's silver must equal the sum of its children's, across a subtree
    with at least two levels of nesting.
