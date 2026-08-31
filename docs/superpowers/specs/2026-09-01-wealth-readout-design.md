@@ -201,7 +201,14 @@ that is not on screen.
 The rebuild **mirrors `CalculateWealthItems` exactly**: `GetAllThingsRecursively` over
 `HaulableEver`, filtered by `WealthWatcher.WealthItemsFilter` (which is `public static` and must be
 reused, not reimplemented), skipping unspawned and fogged, summing `MarketValue * stackCount`. It
-buckets by `ThingDef` and splits stored from elsewhere.
+buckets by `ThingDef`, tracking wealth and total count per def.
+
+**The "stored" count is not ours.** It is always vanilla's own `resourceCounter` value — the same
+number the row prints a few pixels from the tooltip. Deriving it independently, say from
+`IsInAnyStorage`, would let the tooltip contradict the row it is attached to, which reads as a bug
+even when our figure is the more accurate one. "Elsewhere" is then `ourTotalCount - storedCount`,
+clamped at zero: the two sources are not guaranteed to nest, because `ResourceCounter` unwraps
+minified things via `GetInnerIfMinified` while the wealth walk values the minified container.
 
 > Deviating from that walk anywhere — a different request group, a hand-rolled filter, dropping the
 > fogged check — produces numbers that describe a wealth the storyteller does not use. The mod would
