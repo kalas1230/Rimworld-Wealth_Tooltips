@@ -3,3 +3,5 @@
 [Oo]bj/
 *.user
 zzz-Do-Not-Commit/
+Assemblies/
+*.log
