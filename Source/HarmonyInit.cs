@@ -12,9 +12,21 @@ namespace WealthReadout
     {
         static HarmonyInit()
         {
-            // No .Translate() here or anywhere else in a static constructor: translation tables
-            // are not loaded when [StaticConstructorOnStartup] runs, and a key resolved this
-            // early is silently frozen as its raw key string for the rest of the session.
+            // No .Translate() here, and no translated value stored in a static field anywhere in
+            // this mod.
+            //
+            // The reason is NOT that the language is unloaded at this point -- it is loaded.
+            // PlayDataLoader.LoadAllPlayData calls LanguageDatabase.InitAllMetadata() (line 100 of
+            // the 1.6 decompile) and activeLanguage.InjectIntoData_AfterImpliedDefs() (line 333)
+            // well before StaticConstructorOnStartupUtility.CallAll() (line 346), so a .Translate()
+            // here would resolve correctly today.
+            //
+            // The hazard is the opposite one: a static constructor runs once per process, so
+            // anything resolved here is frozen at that language forever. Switching language in the
+            // options menu reloads the language database but does not re-run this constructor, and
+            // the player would keep seeing the old language until they restart the game.
+            //
+            // Resolve keys at call time instead -- see TooltipText.
             var harmony = new Harmony("kalas.wealthreadout");
             harmony.PatchAll(Assembly.GetExecutingAssembly());
             Log.Message("[Wealth Readout] Patches applied.");

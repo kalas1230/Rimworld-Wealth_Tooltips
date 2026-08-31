@@ -17,7 +17,7 @@ Copied from `docs/superpowers/specs/2026-09-01-wealth-readout-design.md` and `HA
 - **Mirror the wealth walk exactly.** `GetAllThingsRecursively` over `ThingRequestGroup.HaulableEver`, filtered with `WealthWatcher.WealthItemsFilter` (reuse it — it is `public static`; never reimplement), skipping anything not `SpawnedOrAnyParentSpawned` or whose `PositionHeld` is fogged, summing `MarketValue * stackCount`. Deviating anywhere makes the mod silently wrong while every check still passes.
 - **Staleness is a constant**, `StalenessTicks = 1000`. Not configurable.
 - **Target 1.6 only.** `supportedVersions` and `LoadFolders.xml` must agree; do not advertise 1.5.
-- **No `.Translate()` in static initializers or static field initializers.** Translation tables are not loaded when static constructors run. Resolve keys at call time.
+- **Never store a `.Translate()` result in a field that outlives the load sequence.** Resolve keys at call time, every time. Note the reason, because the commonly-stated one is wrong: the language *is* loaded by the time `[StaticConstructorOnStartup]` runs (`PlayDataLoader.LoadAllPlayData` calls `LanguageDatabase.InitAllMetadata()` at line 100 and `InjectIntoData_AfterImpliedDefs()` at line 333, before `StaticConstructorOnStartupUtility.CallAll()` at line 346). The real hazard is that a static constructor runs once per process, so a value resolved there is frozen at that language and survives the player switching language in the options menu.
 - **Namespace/assembly:** `WealthReadout`. **packageId:** `kalas.wealthreadout`.
 - **Comment style:** dense justification comments citing decompiled vanilla behaviour at the point of each non-obvious decision, matching the sibling Varied Pawns mod.
 
@@ -827,10 +827,11 @@ namespace WealthReadout
     // exercised from the main menu.
     public static class TooltipText
     {
-        // Every .Translate() call happens here, at call time, never in a static initializer or a
-        // static field initializer. Translation tables are not loaded when static constructors run,
-        // and a key resolved that early is frozen as its raw key string for the whole session --
-        // which shows up as literal "WealthReadout.Line.Wealth" in the tooltip.
+        // Every .Translate() call happens here, at call time, and no translated value is ever
+        // stored in a field. The language is in fact loaded well before [StaticConstructorOnStartup]
+        // runs, so resolving early would look correct -- but a static constructor runs once per
+        // process, so the value would be frozen at whatever language was active then and would
+        // survive the player switching language in the options menu.
         public static string Build(string label, float wealth, float share,
                                    int storedCount, int elsewhereCount)
         {
