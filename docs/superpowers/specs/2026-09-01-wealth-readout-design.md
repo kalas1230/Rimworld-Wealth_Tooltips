@@ -180,6 +180,14 @@ Every patch therefore does the same two things: clear, then register our own tip
 No dependence on vanilla's id scheme, no stacking, no transpiler in any mode. The category tooltip
 today is nothing but the category name, so nothing of value is lost.
 
+> **SUPERSEDED 2026-09-01, after in-game testing.** This section is wrong and the mod shipped no
+> tooltip at all because of it. `ClearTooltipsFrom` *removes the dictionary entry*, so the following
+> `TipRegion` constructs a new `ActiveTip` stamped `firstTriggerTime = now` on every Repaint — and
+> tips only draw once `realtimeSinceStartup > firstTriggerTime + delay`, with `delay = 0.45f`. The
+> stamp never aged, so nothing ever drew, vanilla's included. The implementation now registers under
+> vanilla's own `uniqueId` in all three patches and never clears; simple mode reconstructs vanilla's
+> tagged string to obtain its id. See HANDOVER.md, "`ClearTooltipsFrom` is not rect-scoped".
+
 ### The patches
 
 - **Prefix on `DoCategory` and `DoThingDef`** — record `curY` before the row draws.

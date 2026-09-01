@@ -321,5 +321,42 @@ namespace WealthReadout
             Log.Message($"[Wealth Readout] Rebuild: {perRun:F2} ms/run over {runs} runs " +
                         $"(map {map.Size.x}x{map.Size.z}, wealth {map.wealthWatcher.WealthTotal:F0})");
         }
+
+        // Guards the one assumption the simple-mode patch makes that can drift silently.
+        //
+        // ReadoutPatches.SimpleIconTipId must reproduce the uniqueId vanilla's DrawIcon produces,
+        // or our tip lands under a different id and the player sees two stacked tooltips instead of
+        // one replaced. The expression below is copied verbatim from the 1.6 decompile of
+        // ResourceReadout.DrawIcon; if someone edits the helper, this stops matching.
+        [DebugAction(Category, "Check simple-mode tooltip id", allowedGameStates = AllowedGameStates.Entry)]
+        private static void CheckSimpleTipId()
+        {
+            int checked_ = 0;
+            int mismatches = 0;
+
+            foreach (ThingDef def in DefDatabase<ThingDef>.AllDefsListForReading)
+            {
+                if (!def.PlayerAcquirable || !def.CountAsResource) continue;
+
+                // Verbatim from ResourceReadout.DrawIcon.
+                TaggedString vanillaText = def.LabelCap + ": " + def.description.CapitalizeFirst();
+                int expected = new TipSignal(vanillaText).uniqueId;
+
+                int actual = ReadoutPatches.SimpleIconTipId(def);
+                checked_++;
+                if (actual != expected)
+                {
+                    mismatches++;
+                    if (mismatches <= 5)
+                    {
+                        Log.Error($"[Wealth Readout] Tip id mismatch for {def.defName}: " +
+                                  $"expected {expected}, got {actual}");
+                    }
+                }
+            }
+
+            Log.Message($"[Wealth Readout] Simple-mode tooltip id: " +
+                        $"{(mismatches == 0 ? "PASS" : "FAIL")} ({checked_} defs, {mismatches} mismatched)");
+        }
     }
 }

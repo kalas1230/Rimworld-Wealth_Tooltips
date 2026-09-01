@@ -8,25 +8,32 @@ namespace WealthReadout
     // Shared helper for all four patches.
     public static class ReadoutPatches
     {
-        // Clear, then register our own tip under our own id.
+        // Re-register under VANILLA's uniqueId. Do not clear first -- see below.
         //
-        // The alternative was re-registering under vanilla's uniqueId, which works because
-        // TooltipHandler.TipRegion overwrites rather than stacks:
-        //     if (!activeTips.ContainsKey(tip.uniqueId)) { ... }
+        // TooltipHandler.TipRegion overwrites rather than stacks, and critically it only assigns
+        // firstTriggerTime when the id is NOT already present:
+        //     if (!activeTips.ContainsKey(tip.uniqueId)) { ...; firstTriggerTime = now; }
         //     activeTips[tip.uniqueId].signal.text = tip.text;
-        // But it only works where vanilla's id is knowable. In simple mode ResourceReadout.DrawIcon
-        // uses TipSignal(TaggedString), whose id is text.GetHashCode() -- matching it would mean
-        // reconstructing vanilla's exact string. ClearTooltipsFrom works identically in both modes,
-        // so both use it and neither depends on vanilla's id scheme.
-        public static void ReplaceTip(Rect rect, string text, int uniqueId)
+        // So calling it under the id vanilla just used replaces the text while leaving the tip's
+        // age intact. That matters because DrawActiveTips gates on age:
+        //     if (realtimeSinceStartup > firstTriggerTime + signal.delay) drawingTips.Add(value);
+        // and TipSignal's delay is 0.45s for every constructor we or vanilla use.
+        //
+        // The original design called TooltipHandler.ClearTooltipsFrom(rect) first, which was a bug:
+        // despite the name and the Rect parameter, it uses the rect only as a Repaint/Mouse.IsOver
+        // gate and then removes EVERY tip with lastTriggerFrame == frame -- every tooltip
+        // registered anywhere this frame, vanilla's included. Re-registering afterwards therefore
+        // created a brand-new ActiveTip with firstTriggerTime = now, on every Repaint, so the 0.45s
+        // threshold was never reached and NO tooltip ever drew -- not ours, and not the vanilla one
+        // we had just deleted. Verified against the 1.6 decompile of TooltipHandler and TipSignal.
+        public static void ReplaceTip(Rect rect, string text, int vanillaUniqueId)
         {
             // Kept even though every caller already gates on ShouldBuildTipFor: this is the last
             // line of defence for the invariant TooltipHandler itself relies on, and it is two
             // comparisons.
             if (!ShouldBuildTipFor(rect)) return;
 
-            TooltipHandler.ClearTooltipsFrom(rect);
-            TooltipHandler.TipRegion(rect, new TipSignal(text, uniqueId));
+            TooltipHandler.TipRegion(rect, new TipSignal(text, vanillaUniqueId));
         }
 
         // Call this BEFORE looking anything up, not after.
@@ -40,6 +47,18 @@ namespace WealthReadout
         public static bool ShouldBuildTipFor(Rect rect)
         {
             return Event.current.type == EventType.Repaint && Mouse.IsOver(rect);
+        }
+
+        // Vanilla's uniqueId for a simple-mode icon tip. ResourceReadout.DrawIcon registers
+        //     TaggedString taggedString = thingDef.LabelCap + ": " + thingDef.description.CapitalizeFirst();
+        //     TooltipHandler.TipRegion(rect, taggedString);
+        // and the TipSignal(TaggedString) constructor sets uniqueId = text.GetHashCode(). Since
+        // TaggedString does not override GetHashCode that resolves to ValueType.GetHashCode, so the
+        // id is computed by handing the reconstructed string to TipSignal rather than hashed here.
+        public static int SimpleIconTipId(ThingDef thingDef)
+        {
+            TaggedString vanillaText = thingDef.LabelCap + ": " + thingDef.description.CapitalizeFirst();
+            return new TipSignal(vanillaText).uniqueId;
         }
 
         // Rebuilds the rect vanilla drew the row into. Mirrors Listing_ResourceReadout.DoCategory:
@@ -179,7 +198,17 @@ namespace WealthReadout
                 stored,
                 WealthIndex.ElsewhereCount(total, stored));
 
-            ReadoutPatches.ReplaceTip(rect, text, thingDef.shortHash);
+            // Vanilla's tip here is TipRegion(rect, taggedString), so its uniqueId is whatever
+            // TipSignal derives from that exact TaggedString -- not thingDef.shortHash, which is
+            // what the categorized-mode rows use. Reconstruct vanilla's string and let TipSignal
+            // compute the id from it rather than hashing it here: TaggedString does not override
+            // GetHashCode, so the id comes out of ValueType.GetHashCode and is not ours to
+            // reimplement. Building the string costs one concatenation on the single hovered icon.
+            //
+            // If this reconstruction ever drifts from DrawIcon's, the id stops matching and the
+            // player sees two stacked tooltips rather than one replaced -- visible, not silent.
+            // "Check simple-mode tooltip id" in DebugActions is the check for exactly that.
+            ReadoutPatches.ReplaceTip(rect, text, ReadoutPatches.SimpleIconTipId(thingDef));
         }
     }
 }

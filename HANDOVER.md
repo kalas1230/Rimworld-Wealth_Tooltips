@@ -97,17 +97,62 @@ anything.
 `TooltipHandler.TipRegion` keys on `uniqueId` and overwrites:
 
 ```csharp
-if (!activeTips.ContainsKey(tip.uniqueId)) { ... }
+if (!activeTips.ContainsKey(tip.uniqueId)) { ...; firstTriggerTime = now; }
 activeTips[tip.uniqueId].signal.text = tip.text;   // last call in the frame wins
 ```
 
-Re-registering under vanilla's id therefore replaces vanilla's text. That works in categorized mode,
-where the ids are knowable (`catDef.GetHashCode()`, `thingDef.shortHash`).
+Re-registering under vanilla's id therefore replaces vanilla's text. All three patches do exactly
+that and nothing else — see below for why the original approach was wrong.
 
-**It does not work in simple mode.** `ResourceReadout.DrawIcon` uses `TipSignal(TaggedString)`, whose
-id is `text.GetHashCode()` — matching it means reconstructing vanilla's exact tooltip string. So the
-mod uses `TooltipHandler.ClearTooltipsFrom(rect)` instead, uniformly in both modes: clear, then
-register our own tip under our own id. No dependence on vanilla's id scheme anywhere.
+### `ClearTooltipsFrom` is not rect-scoped — this bug cost a release
+
+**Corrected 2026-09-01, after the first in-game test showed no tooltip at all on hover — not ours,
+and not even vanilla's.**
+
+The original design used `TooltipHandler.ClearTooltipsFrom(rect)` and then registered under our own
+id, so that neither mode had to know vanilla's id scheme. That reasoning was built on the name and
+the `Rect` parameter. The actual 1.6 implementation:
+
+```csharp
+public static void ClearTooltipsFrom(Rect rect)
+{
+    if (Event.current.type != EventType.Repaint || !Mouse.IsOver(rect)) return;
+    foreach (var pair in activeTips)
+        if (pair.Value.lastTriggerFrame == frame) dyingTips.Add(pair.Key);   // EVERY tip this frame
+    ...
+}
+```
+
+The rect is only a gate. What gets removed is **every tooltip registered anywhere this frame**. So
+each Repaint: vanilla registered its tip, we deleted it, and our re-registration created a *new*
+`ActiveTip` — and a new tip is stamped `firstTriggerTime = Time.realtimeSinceStartup`. The draw gate
+is
+
+```csharp
+if (realtimeSinceStartup > value.firstTriggerTime + value.signal.delay) drawingTips.Add(value);
+```
+
+with `delay = 0.45f` on every `TipSignal` constructor in play. Resetting the stamp 60 times a second
+means the 0.45 s threshold is never reached, so nothing ever drew.
+
+**The fix:** never call `ClearTooltipsFrom`. Register under vanilla's own `uniqueId`, which
+overwrites the text while leaving `firstTriggerTime` untouched.
+
+In categorized mode the ids were already knowable and already correct (`catDef.GetHashCode()`,
+`thingDef.shortHash`). Simple mode was the case the clear existed to avoid: `DrawIcon` uses
+`TipSignal(TaggedString)`, whose id is the tagged string's hash. `ReadoutPatches.SimpleIconTipId`
+reconstructs that string and hands it to `TipSignal` rather than hashing it locally — `TaggedString`
+does not override `GetHashCode`, so the id comes from `ValueType.GetHashCode` and must not be
+reimplemented.
+
+**Residual risk, accepted:** if that reconstruction ever drifts from `DrawIcon`'s expression, the
+ids stop matching and the player gets two stacked tooltips. That is visible rather than silent, and
+the *Check simple-mode tooltip id* debug action compares the helper against a verbatim copy of
+vanilla's expression across every resource def. Re-run it on every version bump.
+
+**The general lesson:** a vanilla method taking a `Rect` was assumed to be scoped to that rect
+without reading it. Every other vanilla claim in this file was verified against the decompile; this
+one was not, and it was the one that broke the mod.
 
 ### The percentage denominator is not `WealthTotal`
 
