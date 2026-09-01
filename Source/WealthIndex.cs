@@ -51,10 +51,27 @@ namespace WealthReadout
             if (Current.ProgramState != ProgramState.Playing) return;
 
             Map map = Find.CurrentMap;
-            if (map == null) return;
+            if (map == null)
+            {
+                // Find.CurrentMap is null on the world map and briefly between load and unload.
+                // Without this, the getters below would keep serving whatever map was cached last
+                // -- silently wrong data attributed to a map the player is no longer looking at.
+                // Clearing cachedMap also means the very next EnsureFresh on a real map cannot
+                // false-positive the identity check against a stale reference.
+                defWealth.Clear();
+                defCount.Clear();
+                CategoryCache.Clear();
+                itemsTotal = 0f;
+                cachedMap = null;
+                return;
+            }
 
             int now = Find.TickManager.TicksGame;
-            if (map == cachedMap && now - cachedTick < StalenessTicks) return;
+            // now >= cachedTick is defensive, not load-bearing: reaching a negative diff requires
+            // TicksGame to move backwards on the same Map instance, which vanilla never does --
+            // loading a save deserialises a new Map object, so map == cachedMap already fails on
+            // load. Cheap insurance against a future change we cannot foresee.
+            if (map == cachedMap && now >= cachedTick && now - cachedTick < StalenessTicks) return;
 
             Rebuild(map);
         }
@@ -77,31 +94,55 @@ namespace WealthReadout
             CategoryCache.Clear();
             itemsTotal = 0f;
 
-            tmpThings.Clear();
-            ThingOwnerUtility.GetAllThingsRecursively(
-                map,
-                ThingRequest.ForGroup(ThingRequestGroup.HaulableEver),
-                tmpThings,
-                allowUnreal: false,
-                WealthWatcher.WealthItemsFilter);
-
-            for (int i = 0; i < tmpThings.Count; i++)
+            try
             {
-                Thing t = tmpThings[i];
-                if (!t.SpawnedOrAnyParentSpawned) continue;
-                if (t.PositionHeld.Fogged(map)) continue;
+                tmpThings.Clear();
+                ThingOwnerUtility.GetAllThingsRecursively(
+                    map,
+                    ThingRequest.ForGroup(ThingRequestGroup.HaulableEver),
+                    tmpThings,
+                    allowUnreal: false,
+                    WealthWatcher.WealthItemsFilter);
 
-                float value = t.MarketValue * t.stackCount;
-                itemsTotal += value;
+                for (int i = 0; i < tmpThings.Count; i++)
+                {
+                    Thing t = tmpThings[i];
+                    if (!t.SpawnedOrAnyParentSpawned) continue;
+                    if (t.PositionHeld.Fogged(map)) continue;
 
-                ThingDef def = t.def;
-                defWealth.TryGetValue(def, out float w);
-                defWealth[def] = w + value;
-                defCount.TryGetValue(def, out int c);
-                defCount[def] = c + t.stackCount;
+                    float value = t.MarketValue * t.stackCount;
+                    itemsTotal += value;
+
+                    ThingDef def = t.def;
+                    defWealth.TryGetValue(def, out float w);
+                    defWealth[def] = w + value;
+                    defCount.TryGetValue(def, out int c);
+                    defCount[def] = c + t.stackCount;
+                }
             }
-            tmpThings.Clear();
+            catch (System.Exception e)
+            {
+                // GetAllThingsRecursively or a third-party Thing's MarketValue getter can throw.
+                // This runs inside OnGUI (every EnsureFresh call from a hovered tooltip), so a
+                // rethrow would tear the UI and an uncaught repeating throw would spam the log at
+                // ~60/sec. Log once, discard any partial accumulation so we never serve a total
+                // that only covers part of the map, and fall through to the throttle update below.
+                Log.Error($"[Wealth Readout] WealthIndex.Rebuild failed for map {map}: {e}");
+                defWealth.Clear();
+                defCount.Clear();
+                CategoryCache.Clear();
+                itemsTotal = 0f;
+            }
+            finally
+            {
+                tmpThings.Clear();
+            }
 
+            // Advanced on both success and failure. A repeating throw would otherwise re-attempt
+            // the full map walk on every EnsureFresh call (~60/sec from a hovered tooltip) since
+            // cachedTick would never move and the staleness gate would never engage. Advancing it
+            // here bounds a failed rebuild to serving zeros for at most StalenessTicks before it
+            // retries on its own -- self-healing at a fixed, small cost instead of a retry storm.
             cachedMap = map;
             cachedTick = Find.TickManager.TicksGame;
         }

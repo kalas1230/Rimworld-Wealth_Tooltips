@@ -24,6 +24,19 @@ namespace WealthReadout
             Map map = Find.CurrentMap;
             if (map == null) return;
 
+            // Known and expected divergence: ForceRecount folds pocket maps (see its foreach over
+            // Find.World.pocketMaps) into WealthItems, and our walk covers this map only. On such a
+            // world the comparison below is meaningless -- diff would exceed tolerance even though
+            // the walk is correct, producing a FAIL that is indistinguishable from a real drift. So
+            // check this first and bail before computing or logging any verdict.
+            if (Find.World.pocketMaps.Count > 0)
+            {
+                Log.Message("[Wealth Readout] Reconcile: SKIPPED -- this world has pocket maps, " +
+                            "which WealthWatcher.ForceRecount folds into WealthItems but our walk " +
+                            "does not. Re-run this check on a colony without pocket maps.");
+                return;
+            }
+
             // Force both sides onto the same tick before comparing. WealthWatcher recounts at most
             // every 5000 ticks (MinCountInterval), so without this we would be comparing a fresh
             // number against one that could be 5000 ticks stale and calling the gap a bug.
@@ -46,16 +59,6 @@ namespace WealthReadout
                 Log.Warning("[Wealth Readout] Index does not mirror WealthWatcher. Check the " +
                             "request group, the filter, the fogged check and the spawned check " +
                             "before changing anything else.");
-            }
-
-            // Known and expected divergence: ForceRecount folds pocket maps (see its foreach over
-            // Find.World.pocketMaps) into WealthItems, and our walk covers this map only. Run this
-            // check on a colony with no pocket map, or expect ours < vanilla by exactly the pocket
-            // map's item wealth.
-            if (Find.World.pocketMaps.Count > 0)
-            {
-                Log.Warning("[Wealth Readout] This world has pocket maps; the reconciliation " +
-                            "above is expected to differ. Re-run on a colony without them.");
             }
         }
     }
