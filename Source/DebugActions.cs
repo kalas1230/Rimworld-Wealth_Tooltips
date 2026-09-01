@@ -269,12 +269,13 @@ namespace WealthReadout
             string c = TooltipText.Build("Chocolate", 0f, 0f, 0, 0);
 
             Log.Message($"[Wealth Readout] Sample A:\n{a}\n\nSample B (nothing elsewhere):\n{b}" +
-                        $"\n\nSample C (zero wealth):\n{c}");
+                        $"\n\nSample C (empty row):\n{c}");
 
             // Language-independent: an unresolved key leaks its own name into the output, whatever
             // language is active. This half of the check works on a translated run too.
             bool keysResolved = true;
-            foreach (string key in new[] { "WealthReadout.Line.Wealth", "WealthReadout.Line.Split" })
+            foreach (string key in new[] { "WealthReadout.Line.Wealth", "WealthReadout.Line.Split",
+                                           "WealthReadout.Line.StoredOnly" })
             {
                 if (a.Contains(key) || b.Contains(key) || c.Contains(key))
                 {
@@ -286,14 +287,22 @@ namespace WealthReadout
                 }
             }
 
-            // Structural checks that also hold under translation: B has no split line because
-            // nothing is elsewhere, A does because 70 are. Catches the suppression logic inverting.
-            bool structureOk = a.Split('\n').Length == 3 && b.Split('\n').Length == 2;
+            // Structural checks that also hold under translation. Every sample is three lines --
+            // that is the point of the StoredOnly variant: the tooltip must not change height as
+            // items are hauled in and out of storage under a stationary cursor. Only the second
+            // half of the third line varies, so B and C must still carry their stored figure.
+            bool structureOk = a.Split('\n').Length == 3
+                            && b.Split('\n').Length == 3
+                            && c.Split('\n').Length == 3
+                            && b.EndsWith("460 stored")
+                            && c.EndsWith("0 stored");
             if (!structureOk)
             {
-                Log.Error("[Wealth Readout] Split-line suppression is wrong: sample A (70 " +
-                          "elsewhere) must have 3 lines and sample B (0 elsewhere) must have 2. " +
-                          $"Got {a.Split('\n').Length} and {b.Split('\n').Length}.");
+                Log.Error("[Wealth Readout] Line structure is wrong: every sample must be 3 lines, " +
+                          "and the zero-elsewhere samples must end in their stored count alone " +
+                          "(no \"0 elsewhere\"). Got lengths " +
+                          $"{a.Split('\n').Length}/{b.Split('\n').Length}/{c.Split('\n').Length}, " +
+                          $"B ending \"{b.Split('\n')[2]}\", C ending \"{c.Split('\n')[2]}\".");
             }
 
             // Exact-text comparison only makes sense against the English Keyed file; on any other
@@ -303,10 +312,16 @@ namespace WealthReadout
             if (LanguageDatabase.activeLanguage == LanguageDatabase.defaultLanguage)
             {
                 const string expectedA = "Foods\n1,190 silver \u00b7 2.6% of colony wealth\n240 stored \u00b7 70 elsewhere";
+                const string expectedB = "Plasteel\n1,840 silver \u00b7 4.1% of colony wealth\n460 stored";
                 if (a != expectedA)
                 {
                     englishOk = false;
                     Log.Error($"[Wealth Readout] Sample A text mismatch.\nExpected:\n{expectedA}\nGot:\n{a}");
+                }
+                if (b != expectedB)
+                {
+                    englishOk = false;
+                    Log.Error($"[Wealth Readout] Sample B text mismatch.\nExpected:\n{expectedB}\nGot:\n{b}");
                 }
             }
             else

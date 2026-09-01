@@ -8,4 +8,7 @@
        comment and makes RimWorld discard the whole Keyed file, silently un-translating every key
        in it.) -->
   <WealthReadout.Line.Split>{0} stored · {1} elsewhere</WealthReadout.Line.Split>
+  <!-- {0} count in stockpiles. Used in place of Line.Split when nothing is elsewhere, so the
+       tooltip keeps its three-line shape instead of dropping a line as items are hauled. -->
+  <WealthReadout.Line.StoredOnly>{0} stored</WealthReadout.Line.StoredOnly>
 </LanguageData>

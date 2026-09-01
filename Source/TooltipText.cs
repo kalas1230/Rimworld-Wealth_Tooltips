@@ -30,16 +30,28 @@ namespace WealthReadout
                 wealth.ToString("N0"),
                 share.ToStringPercent("F1")));
 
-            // The split line is suppressed when there is nothing elsewhere, which is the common
-            // case for a tidy colony. Printing "240 stored · 0 elsewhere" on every row would make
-            // the interesting case harder to spot.
-            if (elsewhereCount > 0)
-            {
-                sb.Append('\n');
-                sb.Append("WealthReadout.Line.Split".Translate(
+            // The line is ALWAYS present; only its second half is dropped when nothing is
+            // elsewhere. Three reasons the whole line is not suppressed instead:
+            //
+            // 1. Zero is ambiguous. ElsewhereCount clamps a negative difference to zero, so "0"
+            //    also means "stored exceeded our total" -- the minified case, where ResourceCounter
+            //    unwraps via GetInnerIfMinified while the wealth walk values the container.
+            //    Suppressing the line hides that behind the same silence as a genuinely empty map.
+            // 2. It flickered. The tooltip is rebuilt every Repaint, so one pawn picking up a stack
+            //    added a line under a stationary cursor and hauling it took the line away again.
+            // 3. The zero case is rarer than it looks. Our total counts everything haulable on the
+            //    map -- ground, pawn inventories, containers -- against a stored count that sees
+            //    only slot groups, so on a live colony something is nearly always loose.
+            //
+            // The bare "0 elsewhere" is still not printed: it is noise next to a row that already
+            // shows the same stored figure a few pixels away.
+            sb.Append('\n');
+            sb.Append(elsewhereCount > 0
+                ? "WealthReadout.Line.Split".Translate(
                     storedCount.ToStringCached(),
-                    elsewhereCount.ToStringCached()));
-            }
+                    elsewhereCount.ToStringCached())
+                : "WealthReadout.Line.StoredOnly".Translate(
+                    storedCount.ToStringCached()));
 
             return sb.ToString();
         }
