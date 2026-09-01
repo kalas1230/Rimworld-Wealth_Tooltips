@@ -20,11 +20,26 @@ namespace WealthReadout
         // so both use it and neither depends on vanilla's id scheme.
         public static void ReplaceTip(Rect rect, string text, int uniqueId)
         {
-            if (Event.current.type != EventType.Repaint) return;
-            if (!Mouse.IsOver(rect)) return;
+            // Kept even though every caller already gates on ShouldBuildTipFor: this is the last
+            // line of defence for the invariant TooltipHandler itself relies on, and it is two
+            // comparisons.
+            if (!ShouldBuildTipFor(rect)) return;
 
             TooltipHandler.ClearTooltipsFrom(rect);
             TooltipHandler.TipRegion(rect, new TipSignal(text, uniqueId));
+        }
+
+        // Call this BEFORE looking anything up, not after.
+        //
+        // A postfix runs for every row that drew, on every GUI event the readout receives --
+        // Layout, Repaint, MouseDown and the rest -- so a tree with dozens of visible rows runs its
+        // body many times per frame. Only one of those rows is under the cursor, and only Repaint
+        // can register a tooltip at all. Doing the wealth lookups and building the tooltip string
+        // first and discarding them here would allocate a string per visible row per event, all but
+        // one of them thrown away.
+        public static bool ShouldBuildTipFor(Rect rect)
+        {
+            return Event.current.type == EventType.Repaint && Mouse.IsOver(rect);
         }
 
         // Rebuilds the rect vanilla drew the row into. Mirrors Listing_ResourceReadout.DoCategory:
@@ -64,6 +79,12 @@ namespace WealthReadout
             // height does not matter.
             if (__instance.CurHeight == __state) return;
 
+            // Rect first, then the gate, then the lookups. RowRect is three field reads and a
+            // multiply; everything after the gate is a dictionary walk plus a string build, and on
+            // all but one row per Repaint the answer would be discarded.
+            Rect rect = ReadoutPatches.RowRect(__instance, __state, nestLevel);
+            if (!ReadoutPatches.ShouldBuildTipFor(rect)) return;
+
             Map map = Find.CurrentMap;
             if (map == null) return;
 
@@ -79,8 +100,7 @@ namespace WealthReadout
                 stored,
                 WealthIndex.ElsewhereCount(total, stored));
 
-            ReadoutPatches.ReplaceTip(ReadoutPatches.RowRect(__instance, __state, nestLevel),
-                                      text, cat.GetHashCode());
+            ReadoutPatches.ReplaceTip(rect, text, cat.GetHashCode());
         }
     }
 
@@ -98,6 +118,10 @@ namespace WealthReadout
             // DoThingDef early-returns when GetCount is zero. Same reasoning as above.
             if (__instance.CurHeight == __state) return;
 
+            // Same ordering as DoCategory_Patch: cheap rect, gate, then the expensive work.
+            Rect rect = ReadoutPatches.RowRect(__instance, __state, nestLevel);
+            if (!ReadoutPatches.ShouldBuildTipFor(rect)) return;
+
             Map map = Find.CurrentMap;
             if (map == null) return;
 
@@ -114,8 +138,7 @@ namespace WealthReadout
                 stored,
                 WealthIndex.ElsewhereCount(total, stored));
 
-            ReadoutPatches.ReplaceTip(ReadoutPatches.RowRect(__instance, __state, nestLevel),
-                                      text, thingDef.shortHash);
+            ReadoutPatches.ReplaceTip(rect, text, thingDef.shortHash);
         }
     }
 }
