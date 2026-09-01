@@ -14,8 +14,15 @@ namespace WealthReadout
     {
         // Not configurable, by design: the mod ships no settings page. A bad value here is a patch,
         // not a user-side workaround, which is why profiling it is a release gate.
-        // For scale: WealthWatcher runs this same pass every 5000 ticks (MinCountInterval).
-        private const int StalenessTicks = 1000;
+        //
+        // Set to 5000 provisionally -- the conservative end of the plan's decision rule, matching
+        // WealthWatcher.MinCountInterval so our rebuild is never more frequent than the same pass
+        // vanilla already runs. NOT yet backed by a measurement: the "Profile index rebuild" debug
+        // action has not been run on a heavy map. Once it has, lower this to 1000 if the rebuild
+        // comes in under ~5 ms, or to 2500 at 5-15 ms, and replace this note with the figure.
+        //
+        // Cost of erring high: a hovered tooltip can report numbers up to 5000 ticks stale.
+        private const int StalenessTicks = 5000;
 
         private static Map cachedMap;
         private static int cachedTick = -99999;
@@ -284,12 +291,13 @@ namespace WealthReadout
         // buildings/pawns/floors remainder from vanilla, and the items half from our own pass, is
         // internally consistent.
         //
-        // Residual drift accepted: itemsTotal refreshes on this mod's own StalenessTicks
-        // (1000 ticks) while the nonItems remainder refreshes on vanilla's MinCountInterval
-        // (5000 ticks), so the two terms can still come from moments up to that far apart.
-        // This is strictly smaller than the inconsistency the design already rejected above
-        // (taking the whole total from vanilla, up to a full 5000-tick gap), and is accepted
-        // deliberately rather than fixed.
+        // Residual drift accepted: itemsTotal refreshes on this mod's own StalenessTicks while
+        // the nonItems remainder refreshes on vanilla's MinCountInterval. At the current value the
+        // two intervals are the same length but not in phase, so the terms can still come from
+        // moments up to 5000 ticks apart. What the split still buys is that the numerator and the
+        // itemsTotal half of the denominator come from one pass and always agree with each other --
+        // shares add up -- which is exactly what taking the whole total from vanilla loses.
+        // Lowering StalenessTicks after profiling shrinks this gap; it is accepted, not fixed.
         public static float Denominator
         {
             get

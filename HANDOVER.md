@@ -186,6 +186,12 @@ kept separate from the Varied Pawns mod.
 ## Open items
 
 1. **Profile the staleness constant.** Highest priority. No setting exists to escape a bad value.
+   Currently set to **5000 ticks** provisionally — the conservative end of the plan's decision
+   rule, matching `WealthWatcher.MinCountInterval` so the rebuild is never more frequent than
+   the pass vanilla already runs. This is a safe default, **not a measurement**: the
+   *Profile index rebuild* debug action (added 2026-09-01) has not yet been run on a heavy
+   map. When it is, lower to 1000 under ~5 ms/run or 2500 at 5–15 ms, and record the figure
+   and the map it came from here.
 2. **`IsInAnyStorage` vs deep-storage mods.** The stored/elsewhere split depends on what counts as
    storage; container-adding mods may make it misleading. Test against at least one.
 3. **Rect reconstruction is coupled to vanilla's layout arithmetic.** If Ludeon changes indentation
