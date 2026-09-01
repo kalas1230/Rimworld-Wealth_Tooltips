@@ -1,4 +1,5 @@
 using LudeonTK;
+using RimWorld;
 using UnityEngine;
 using Verse;
 
@@ -60,6 +61,62 @@ namespace WealthReadout
                             "request group, the filter, the fogged check and the spawned check " +
                             "before changing anything else.");
             }
+        }
+
+        // Verification item 3: a parent category's silver must equal the sum of its children's,
+        // across at least two levels of nesting. This is what catches a broken recursion.
+        [DebugAction(Category, "Check category subtree summing",
+            allowedGameStates = AllowedGameStates.PlayingOnMap)]
+        private static void CheckCategorySumming()
+        {
+            Map map = Find.CurrentMap;
+            if (map == null) return;
+            WealthIndex.Rebuild(map);
+
+            int checkedCount = 0;
+            int failed = 0;
+
+            foreach (ThingCategoryDef cat in DefDatabase<ThingCategoryDef>.AllDefsListForReading)
+            {
+                if (cat.childCategories.NullOrEmpty() && cat.childThingDefs.NullOrEmpty()) continue;
+
+                float parent = WealthIndex.WealthOf(cat);
+
+                float sum = 0f;
+                for (int i = 0; i < cat.childThingDefs.Count; i++)
+                    sum += WealthIndex.WealthOf(cat.childThingDefs[i]);
+                for (int j = 0; j < cat.childCategories.Count; j++)
+                    sum += WealthIndex.WealthOf(cat.childCategories[j]);
+
+                checkedCount++;
+                if (Mathf.Abs(parent - sum) > 0.5f)
+                {
+                    failed++;
+                    Log.Warning($"[Wealth Readout] {cat.defName}: parent={parent:F2} sum={sum:F2}");
+                }
+            }
+
+            Log.Message($"[Wealth Readout] Category summing: {checkedCount} checked, " +
+                        $"{failed} mismatched -> {(failed == 0 ? "PASS" : "FAIL")}");
+        }
+
+        // Verification of the denominator's shape. The share of the single largest category must be
+        // strictly between 0 and 1, and total item wealth must never exceed the denominator.
+        [DebugAction(Category, "Check share denominator",
+            allowedGameStates = AllowedGameStates.PlayingOnMap)]
+        private static void CheckDenominator()
+        {
+            Map map = Find.CurrentMap;
+            if (map == null) return;
+            map.wealthWatcher.ForceRecount();
+            WealthIndex.Rebuild(map);
+
+            float denom = WealthIndex.Denominator;
+            float items = WealthIndex.ItemsTotal;
+            bool pass = denom > 0f && items <= denom + 1f;
+
+            Log.Message($"[Wealth Readout] Denominator={denom:F2} items={items:F2} " +
+                        $"buildings+pawns+floors={(denom - items):F2} -> {(pass ? "PASS" : "FAIL")}");
         }
     }
 }

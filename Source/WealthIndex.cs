@@ -62,7 +62,7 @@ namespace WealthReadout
                 // false-positive the identity check against a stale reference.
                 defWealth.Clear();
                 defCount.Clear();
-                CategoryCache.Clear();
+                ClearCategoryCache();
                 itemsTotal = 0f;
                 cachedMap = null;
                 return;
@@ -93,7 +93,7 @@ namespace WealthReadout
         {
             defWealth.Clear();
             defCount.Clear();
-            CategoryCache.Clear();
+            ClearCategoryCache();
             itemsTotal = 0f;
 
             try
@@ -137,7 +137,7 @@ namespace WealthReadout
                 // catch block exists to prevent.
                 defWealth.Clear();
                 defCount.Clear();
-                CategoryCache.Clear();
+                ClearCategoryCache();
                 itemsTotal = 0f;
                 Log.Error($"[Wealth Readout] WealthIndex.Rebuild failed for map {map}: {e}");
             }
@@ -161,8 +161,73 @@ namespace WealthReadout
             }
         }
 
-        // Filled in by Task 3.
-        internal static readonly Dictionary<ThingCategoryDef, float> CategoryCache =
+        private static readonly Dictionary<ThingCategoryDef, float> CategoryCache =
             new Dictionary<ThingCategoryDef, float>();
+
+        internal static void ClearCategoryCache()
+        {
+            CategoryCache.Clear();
+        }
+
+        // Mirrors ResourceCounter.GetCountIn(ThingCategoryDef): own childThingDefs, then recurse
+        // into childCategories. Memoised, because a deep category is otherwise re-walked on every
+        // frame of a hover.
+        //
+        // Note what is deliberately NOT done here: sibling categories are never summed together.
+        // A ThingDef can belong to more than one ThingCategoryDef, so each category's own total is
+        // correct while a sum across siblings would double-count. This is exactly why the "not
+        // listed" footer was cut from the design -- see HANDOVER.md.
+        public static float WealthOf(ThingCategoryDef cat)
+        {
+            EnsureFresh();
+            return WealthOfCategoryRaw(cat);
+        }
+
+        private static float WealthOfCategoryRaw(ThingCategoryDef cat)
+        {
+            if (CategoryCache.TryGetValue(cat, out float cached)) return cached;
+
+            float sum = 0f;
+            for (int i = 0; i < cat.childThingDefs.Count; i++)
+            {
+                defWealth.TryGetValue(cat.childThingDefs[i], out float v);
+                sum += v;
+            }
+            for (int j = 0; j < cat.childCategories.Count; j++)
+            {
+                sum += WealthOfCategoryRaw(cat.childCategories[j]);
+            }
+
+            CategoryCache[cat] = sum;
+            return sum;
+        }
+
+        // Not map.wealthWatcher.WealthTotal.
+        //
+        // WealthWatcher recounts at most every 5000 ticks, so its WealthItems and our pass come
+        // from different moments. Taking the whole total from vanilla would put a fresh numerator
+        // over a stale denominator and produce category shares that do not add up. Taking only the
+        // buildings/pawns/floors remainder from vanilla, and the items half from our own pass, is
+        // internally consistent.
+        public static float Denominator
+        {
+            get
+            {
+                EnsureFresh();
+                Map map = Find.CurrentMap;
+                if (map == null) return 0f;
+
+                WealthWatcher ww = map.wealthWatcher;
+                float nonItems = ww.WealthTotal - ww.WealthItems;
+                return itemsTotal + nonItems;
+            }
+        }
+
+        // 0-1. Returns 0 rather than dividing by zero on a map with no wealth at all.
+        public static float ShareOf(float wealth)
+        {
+            float denom = Denominator;
+            return denom > 0f ? wealth / denom : 0f;
+        }
     }
 }
