@@ -48,9 +48,11 @@ namespace WealthReadout
         // everything below the tick check is a dictionary lookup.
         public static void EnsureFresh()
         {
-            if (Current.ProgramState != ProgramState.Playing) return;
-
-            Map map = Find.CurrentMap;
+            // Not Playing means we are at the main menu or mid-teardown. Falling through to the
+            // null-map branch rather than returning bare: a plain return would leave cachedMap
+            // holding a reference to a torn-down Map (and, through it, its whole object graph)
+            // alive in a static field until some later Rebuild happened to overwrite it.
+            Map map = Current.ProgramState == ProgramState.Playing ? Find.CurrentMap : null;
             if (map == null)
             {
                 // Find.CurrentMap is null on the world map and briefly between load and unload.
@@ -127,24 +129,36 @@ namespace WealthReadout
                 // rethrow would tear the UI and an uncaught repeating throw would spam the log at
                 // ~60/sec. Log once, discard any partial accumulation so we never serve a total
                 // that only covers part of the map, and fall through to the throttle update below.
-                Log.Error($"[Wealth Readout] WealthIndex.Rebuild failed for map {map}: {e}");
+                // Discard BEFORE logging, not after. Log.Error is not guaranteed to return: a
+                // custom log listener, a dev-mode error popup hook, or ToString() on a poisoned
+                // Thing can throw out of it. If that happened with the clears below it, the
+                // exception would escape Rebuild uncaught and the throttle update at the end of
+                // this method would never run -- reopening the exact ~60/sec retry storm this
+                // catch block exists to prevent.
                 defWealth.Clear();
                 defCount.Clear();
                 CategoryCache.Clear();
                 itemsTotal = 0f;
+                Log.Error($"[Wealth Readout] WealthIndex.Rebuild failed for map {map}: {e}");
             }
             finally
             {
                 tmpThings.Clear();
-            }
 
-            // Advanced on both success and failure. A repeating throw would otherwise re-attempt
-            // the full map walk on every EnsureFresh call (~60/sec from a hovered tooltip) since
-            // cachedTick would never move and the staleness gate would never engage. Advancing it
-            // here bounds a failed rebuild to serving zeros for at most StalenessTicks before it
-            // retries on its own -- self-healing at a fixed, small cost instead of a retry storm.
-            cachedMap = map;
-            cachedTick = Find.TickManager.TicksGame;
+                // The throttle update lives in the finally, not after the try/catch, and that
+                // placement is the whole point. A repeating throw would otherwise re-attempt the
+                // full map walk on every EnsureFresh call (~60/sec from a hovered tooltip), since
+                // cachedTick would never move and the staleness gate would never engage. Advancing
+                // it bounds a failed rebuild to serving zeros for at most StalenessTicks before it
+                // retries on its own -- self-healing at a fixed, small cost instead of a retry storm.
+                //
+                // In the finally specifically because the catch block itself can throw: Log.Error
+                // is not guaranteed to return (a custom log listener, a dev-mode error popup hook,
+                // or ToString() on a poisoned Thing). Sitting after the try/catch, this would be
+                // skipped in exactly that case and the retry storm would be back.
+                cachedMap = map;
+                cachedTick = Find.TickManager.TicksGame;
+            }
         }
 
         // Filled in by Task 3.
