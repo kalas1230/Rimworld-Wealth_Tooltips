@@ -216,6 +216,40 @@ namespace WealthReadout
             return sum;
         }
 
+        // Mirrors ResourceCounter.GetCountIn(ThingCategoryDef): own childThingDefs, then recurse
+        // into childCategories. Unlike WealthOf(ThingCategoryDef) this is not memoised -- it is
+        // only called from the debug harness today, not from a per-frame tooltip, so the cost of
+        // re-walking is not yet worth a second cache keyed the same way as CategoryCache.
+        public static int TotalCountOf(ThingCategoryDef cat)
+        {
+            EnsureFresh();
+            int sum = 0;
+            for (int i = 0; i < cat.childThingDefs.Count; i++)
+            {
+                defCount.TryGetValue(cat.childThingDefs[i], out int v);
+                sum += v;
+            }
+            for (int j = 0; j < cat.childCategories.Count; j++)
+            {
+                sum += TotalCountOf(cat.childCategories[j]);
+            }
+            return sum;
+        }
+
+        // The stored figure is ALWAYS vanilla's own resourceCounter value -- the same number the
+        // row prints a few pixels away. Deriving it independently (say from IsInAnyStorage) would
+        // let the tooltip contradict the row it is attached to, which reads as a bug even when our
+        // number is the more accurate one.
+        //
+        // Clamped at zero because the two sources are not guaranteed to nest: ResourceCounter
+        // unwraps minified things via GetInnerIfMinified while the wealth walk values the minified
+        // container, so a colony full of minified furniture can push stored above our total.
+        public static int ElsewhereCount(int totalCount, int storedCount)
+        {
+            int diff = totalCount - storedCount;
+            return diff > 0 ? diff : 0;
+        }
+
         // Not map.wealthWatcher.WealthTotal.
         //
         // WealthWatcher recounts at most every 5000 ticks, so its WealthItems and our pass come

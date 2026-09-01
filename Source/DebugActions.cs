@@ -158,5 +158,27 @@ namespace WealthReadout
                         $"nonItems={nonItems:F2} vanillaWealthTotal={ww.WealthTotal:F2} " +
                         $"diff={diff:F2} -> {(pass ? "PASS" : "FAIL")}");
         }
+
+        // Verification item 2: something outside storage must move the elsewhere figure and must
+        // NOT move the row's stored count.
+        //
+        // Run this, then drop a stack outside every stockpile with the debug spawner and run it
+        // again. stored must be unchanged; elsewhere must have risen by the stack size.
+        [DebugAction(Category, "Report stored vs elsewhere (steel)",
+            allowedGameStates = AllowedGameStates.PlayingOnMap)]
+        private static void ReportStoredVsElsewhere()
+        {
+            Map map = Find.CurrentMap;
+            if (map == null) return;
+            WealthIndex.Rebuild(map);
+
+            ThingDef steel = ThingDefOf.Steel;
+            int total = WealthIndex.CountOf(steel);
+            int stored = map.resourceCounter.GetCount(steel);
+            int elsewhere = WealthIndex.ElsewhereCount(total, stored);
+
+            Log.Message($"[Wealth Readout] Steel: total={total} stored={stored} " +
+                        $"elsewhere={elsewhere} wealth={WealthIndex.WealthOf(steel):F2}");
+        }
     }
 }
