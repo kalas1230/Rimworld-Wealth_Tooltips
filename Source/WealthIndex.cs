@@ -217,12 +217,28 @@ namespace WealthReadout
         }
 
         // Mirrors ResourceCounter.GetCountIn(ThingCategoryDef): own childThingDefs, then recurse
-        // into childCategories. Unlike WealthOf(ThingCategoryDef) this is not memoised -- it is
-        // only called from the debug harness today, not from a per-frame tooltip, so the cost of
-        // re-walking is not yet worth a second cache keyed the same way as CategoryCache.
+        // into childCategories. Exists for Task 6's categorized-readout tooltips, which need a
+        // category's total item count across its whole subtree to compute ElsewhereCount against
+        // ResourceCounter.GetCountIn. As of this commit its only exercise is the "Report stored
+        // vs elsewhere" debug action below -- Task 6 has not landed yet, so there is no other
+        // call site.
         public static int TotalCountOf(ThingCategoryDef cat)
         {
             EnsureFresh();
+            return TotalCountOfCategoryRaw(cat);
+        }
+
+        // Split from TotalCountOf the same way WealthOfCategoryRaw is split from WealthOf, so
+        // EnsureFresh runs once per public call instead of once per node of the recursion.
+        //
+        // Deliberately NOT memoised, unlike WealthOfCategoryRaw. Memoising would need a second
+        // cache keyed by ThingCategoryDef alongside CategoryCache, invalidated on the same
+        // Rebuild -- doable, but there is no per-frame caller yet to justify the extra state:
+        // today's only caller is the debug action below, run on demand from the dev menu, not
+        // 60 times a second from a hovered tooltip. Revisit when Task 6 wires this into a
+        // tooltip's OnGUI path, where the cost would compound with tree depth on every repaint.
+        private static int TotalCountOfCategoryRaw(ThingCategoryDef cat)
+        {
             int sum = 0;
             for (int i = 0; i < cat.childThingDefs.Count; i++)
             {
@@ -231,7 +247,7 @@ namespace WealthReadout
             }
             for (int j = 0; j < cat.childCategories.Count; j++)
             {
-                sum += TotalCountOf(cat.childCategories[j]);
+                sum += TotalCountOfCategoryRaw(cat.childCategories[j]);
             }
             return sum;
         }

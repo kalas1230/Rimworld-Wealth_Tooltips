@@ -177,8 +177,41 @@ namespace WealthReadout
             int stored = map.resourceCounter.GetCount(steel);
             int elsewhere = WealthIndex.ElsewhereCount(total, stored);
 
+            // Unclamped diff logged alongside the clamped elsewhere figure so a developer can
+            // see total<stored (raw diff negative) at a glance instead of having to infer it from
+            // elsewhere==0, which is indistinguishable from a genuine zero. ElsewhereCount itself
+            // stays clamped -- that clamp is specified and correct; this is diagnostic-only.
             Log.Message($"[Wealth Readout] Steel: total={total} stored={stored} " +
-                        $"elsewhere={elsewhere} wealth={WealthIndex.WealthOf(steel):F2}");
+                        $"rawDiff={total - stored} elsewhere={elsewhere} " +
+                        $"wealth={WealthIndex.WealthOf(steel):F2}");
+        }
+
+        // Companion to the steel report above, but through TotalCountOf(ThingCategoryDef)
+        // instead of CountOf(ThingDef) -- the steel action never runs the category recursion, so
+        // without this TotalCountOf would ship with no call site at all. ResourcesRaw is used
+        // because it is a vanilla category (steel, wood, stone chunks, etc.) that a normal
+        // colony reliably has both defined and stored, unlike a hand-picked leaf ThingDef.
+        //
+        // This mirrors exactly what Task 6's tooltip will compute for a hovered category, so it
+        // doubles as an early check on that path: run this, then drop a ResourcesRaw item
+        // outside every stockpile with the debug spawner and run it again. stored must be
+        // unchanged; elsewhere must have risen by the stack size.
+        [DebugAction(Category, "Report stored vs elsewhere (category)",
+            allowedGameStates = AllowedGameStates.PlayingOnMap)]
+        private static void ReportStoredVsElsewhereCategory()
+        {
+            Map map = Find.CurrentMap;
+            if (map == null) return;
+            WealthIndex.Rebuild(map);
+
+            ThingCategoryDef cat = DefDatabase<ThingCategoryDef>.GetNamed("ResourcesRaw");
+            int total = WealthIndex.TotalCountOf(cat);
+            int stored = map.resourceCounter.GetCountIn(cat);
+            int elsewhere = WealthIndex.ElsewhereCount(total, stored);
+
+            // Unclamped diff logged for the same reason as the steel report above.
+            Log.Message($"[Wealth Readout] {cat.label}: total={total} stored={stored} " +
+                        $"rawDiff={total - stored} elsewhere={elsewhere}");
         }
     }
 }
