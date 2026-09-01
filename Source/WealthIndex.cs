@@ -164,9 +164,16 @@ namespace WealthReadout
         private static readonly Dictionary<ThingCategoryDef, float> CategoryCache =
             new Dictionary<ThingCategoryDef, float>();
 
+        // Mirrors CategoryCache exactly -- same lifetime, same invalidation, same key. Added
+        // alongside it in Task 6, once DoCategory_Patch became the first per-frame caller of
+        // TotalCountOf (see TotalCountOfCategoryRaw below).
+        private static readonly Dictionary<ThingCategoryDef, int> CategoryCountCache =
+            new Dictionary<ThingCategoryDef, int>();
+
         internal static void ClearCategoryCache()
         {
             CategoryCache.Clear();
+            CategoryCountCache.Clear();
         }
 
         // Mirrors ResourceCounter.GetCountIn(ThingCategoryDef): own childThingDefs, then recurse
@@ -217,11 +224,10 @@ namespace WealthReadout
         }
 
         // Mirrors ResourceCounter.GetCountIn(ThingCategoryDef): own childThingDefs, then recurse
-        // into childCategories. Exists for Task 6's categorized-readout tooltips, which need a
-        // category's total item count across its whole subtree to compute ElsewhereCount against
-        // ResourceCounter.GetCountIn. As of this commit its only exercise is the "Report stored
-        // vs elsewhere (category)" action in DebugActions.cs -- Task 6 has not landed yet, so there
-        // is no other call site.
+        // into childCategories. Exists for the categorized-readout tooltips (DoCategory_Patch in
+        // ReadoutPatches.cs, Task 6), which need a category's total item count across its whole
+        // subtree to compute ElsewhereCount against ResourceCounter.GetCountIn. Also exercised by
+        // the "Report stored vs elsewhere (category)" action in DebugActions.cs.
         public static int TotalCountOf(ThingCategoryDef cat)
         {
             EnsureFresh();
@@ -231,14 +237,16 @@ namespace WealthReadout
         // Split from TotalCountOf the same way WealthOfCategoryRaw is split from WealthOf, so
         // EnsureFresh runs once per public call instead of once per node of the recursion.
         //
-        // Deliberately NOT memoised, unlike WealthOfCategoryRaw. Memoising would need a second
-        // cache keyed by ThingCategoryDef alongside CategoryCache, invalidated on the same
-        // Rebuild -- doable, but there is no per-frame caller yet to justify the extra state:
-        // today the only caller is ReportStoredVsElsewhereCategory in DebugActions.cs, run on demand
-        // from the dev menu, not 60 times a second. Revisit when Task 6 wires this into a
-        // tooltip's OnGUI path, where the cost would compound with tree depth on every repaint.
+        // Memoised via CategoryCountCache, mirroring WealthOfCategoryRaw. This was NOT memoised
+        // before Task 6: the only caller was ReportStoredVsElsewhereCategory in DebugActions.cs,
+        // run on demand from the dev menu, not 60 times a second. Task 6's DoCategory_Patch is
+        // now a per-frame caller -- it runs on every Repaint while the mouse rests on a category
+        // row -- so the recursion's cost would otherwise compound with subtree depth on every
+        // frame of a hover, exactly like WealthOfCategoryRaw's own justification above.
         private static int TotalCountOfCategoryRaw(ThingCategoryDef cat)
         {
+            if (CategoryCountCache.TryGetValue(cat, out int cached)) return cached;
+
             int sum = 0;
             for (int i = 0; i < cat.childThingDefs.Count; i++)
             {
@@ -249,6 +257,8 @@ namespace WealthReadout
             {
                 sum += TotalCountOfCategoryRaw(cat.childCategories[j]);
             }
+
+            CategoryCountCache[cat] = sum;
             return sum;
         }
 
