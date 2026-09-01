@@ -204,7 +204,24 @@ namespace WealthReadout
             if (map == null) return;
             WealthIndex.Rebuild(map);
 
-            ThingCategoryDef cat = DefDatabase<ThingCategoryDef>.GetNamed("ResourcesRaw");
+            // ResourcesRaw specifically because it exercises BOTH branches of the recursion rather
+            // than only the leaf one: Core/Defs/ThingCategoryDefs/ThingCategories.xml gives it two
+            // child categories (PlantMatter and StoneBlocks), while ThingDefs such as Steel list it
+            // directly in their thingCategories. A category with no children would silently test
+            // half of TotalCountOfCategoryRaw and look like it passed.
+            //
+            // GetNamedSilentFail rather than GetNamed: a total conversion can remove or rename a
+            // vanilla category, and GetNamed would log its own less specific error and still return
+            // null, throwing an NRE out of a dev-menu action instead of saying what to do about it.
+            ThingCategoryDef cat = DefDatabase<ThingCategoryDef>.GetNamedSilentFail("ResourcesRaw");
+            if (cat == null)
+            {
+                Log.Error("[Wealth Readout] ThingCategoryDef 'ResourcesRaw' not found -- a mod has " +
+                          "removed or renamed it. Point this action at another category that has " +
+                          "child categories, or the recursion goes untested.");
+                return;
+            }
+
             int total = WealthIndex.TotalCountOf(cat);
             int stored = map.resourceCounter.GetCountIn(cat);
             int elsewhere = WealthIndex.ElsewhereCount(total, stored);

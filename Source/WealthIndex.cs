@@ -220,8 +220,8 @@ namespace WealthReadout
         // into childCategories. Exists for Task 6's categorized-readout tooltips, which need a
         // category's total item count across its whole subtree to compute ElsewhereCount against
         // ResourceCounter.GetCountIn. As of this commit its only exercise is the "Report stored
-        // vs elsewhere" debug action below -- Task 6 has not landed yet, so there is no other
-        // call site.
+        // vs elsewhere (category)" action in DebugActions.cs -- Task 6 has not landed yet, so there
+        // is no other call site.
         public static int TotalCountOf(ThingCategoryDef cat)
         {
             EnsureFresh();
@@ -234,8 +234,8 @@ namespace WealthReadout
         // Deliberately NOT memoised, unlike WealthOfCategoryRaw. Memoising would need a second
         // cache keyed by ThingCategoryDef alongside CategoryCache, invalidated on the same
         // Rebuild -- doable, but there is no per-frame caller yet to justify the extra state:
-        // today's only caller is the debug action below, run on demand from the dev menu, not
-        // 60 times a second from a hovered tooltip. Revisit when Task 6 wires this into a
+        // today the only caller is ReportStoredVsElsewhereCategory in DebugActions.cs, run on demand
+        // from the dev menu, not 60 times a second. Revisit when Task 6 wires this into a
         // tooltip's OnGUI path, where the cost would compound with tree depth on every repaint.
         private static int TotalCountOfCategoryRaw(ThingCategoryDef cat)
         {
