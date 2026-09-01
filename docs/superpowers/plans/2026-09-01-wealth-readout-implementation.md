@@ -840,9 +840,10 @@ namespace WealthReadout
             sb.Append('\n');
 
             // Silver is rounded to whole units: fractions of a silver are noise at colony scale,
-            // and the panel is narrow. ToStringMoney gives vanilla's own money formatting.
+            // and the panel is narrow. "N0" keeps the number bare so the key supplies the unit;
+            // ToStringMoney would print "$1190 silver", since it already carries the currency.
             sb.Append("WealthReadout.Line.Wealth".Translate(
-                wealth.ToStringMoney(),
+                wealth.ToString("N0"),
                 share.ToStringPercent("F1")));
 
             // The split line is suppressed when there is nothing elsewhere, which is the common
@@ -871,16 +872,16 @@ Expected in `Player.log`:
 ```
 Sample A:
 Foods
-$1190 · 2.6% of colony wealth
+1,190 silver · 2.6% of colony wealth
 240 stored · 70 elsewhere
 
 Sample B (nothing elsewhere):
 Plasteel
-$1840 · 4.1% of colony wealth
+1,840 silver · 4.1% of colony wealth
 
 Sample C (zero wealth):
 Chocolate
-$0 · 0.0% of colony wealth
+0 silver · 0.0% of colony wealth
 ```
 
 If a line reads `WealthReadout.Line.Wealth` instead of the text, a key resolved too early or the

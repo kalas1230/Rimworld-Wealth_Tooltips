@@ -19,10 +19,15 @@ namespace WealthReadout
             sb.Append(label);
             sb.Append('\n');
 
-            // Silver is rounded to whole units: fractions of a silver are noise at colony scale,
-            // and the panel is narrow. ToStringMoney gives vanilla's own money formatting.
+            // "N0", not ToStringMoney(). ToStringMoney renders "$1190" -- it already carries the
+            // currency -- and the key's text names the unit as "silver", so using it would print
+            // "$1190 silver". The approved design reads "1,190 silver", so the number is formatted
+            // bare and the key supplies the unit.
+            //
+            // Rounded to whole units: fractions of a silver are noise at colony scale and the
+            // readout panel is narrow. "N0" gives the reader's own thousands separator.
             sb.Append("WealthReadout.Line.Wealth".Translate(
-                wealth.ToStringMoney(),
+                wealth.ToString("N0"),
                 share.ToStringPercent("F1")));
 
             // The split line is suppressed when there is nothing elsewhere, which is the common
