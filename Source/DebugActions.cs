@@ -230,5 +230,18 @@ namespace WealthReadout
             Log.Message($"[Wealth Readout] {cat.label}: total={total} stored={stored} " +
                         $"rawDiff={total - stored} elsewhere={elsewhere}");
         }
+
+        // Formatting only. Runs without a map so it can be exercised from the main menu, which is
+        // also the cheapest place to catch a missing translation key.
+        [DebugAction(Category, "Print sample tooltips", allowedGameStates = AllowedGameStates.Entry)]
+        private static void PrintSampleTooltips()
+        {
+            Log.Message("[Wealth Readout] Sample A:\n" +
+                        TooltipText.Build("Foods", 1190f, 0.026f, 240, 70));
+            Log.Message("[Wealth Readout] Sample B (nothing elsewhere):\n" +
+                        TooltipText.Build("Plasteel", 1840f, 0.041f, 460, 0));
+            Log.Message("[Wealth Readout] Sample C (zero wealth):\n" +
+                        TooltipText.Build("Chocolate", 0f, 0f, 0, 0));
+        }
     }
 }
