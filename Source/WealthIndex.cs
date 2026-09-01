@@ -183,6 +183,20 @@ namespace WealthReadout
             return WealthOfCategoryRaw(cat);
         }
 
+        // No cycle guard, no visited set, deliberately: ResourceCounter.GetCountIn -- what
+        // this mirrors -- has none either. A cyclic category graph cannot reach this code in
+        // the first place. ThingCategoryDef.ResolveReferences itself walks
+        // ThisAndChildCategoryDefs (which recurses childCategories with no guard of its own)
+        // to build allChildThingDefsCached, so a cycle would stack-overflow during def
+        // resolution at startup, long before any tooltip ever calls WealthOf. childCategories
+        // and childThingDefs are also field-initialised to new List<>() in ThingCategoryDef,
+        // so they are never null and need no null guard here -- again matching vanilla's own
+        // unguarded access to the same fields.
+        //
+        // What this does NOT guard against: a DAG that is not a strict tree, i.e. one
+        // category listed under two different parents. Such a subtree would be counted once
+        // per path reaching it. But so would vanilla's GetCountIn, identically -- matching
+        // vanilla's behaviour is the requirement, not inventing a stricter one it doesn't have.
         private static float WealthOfCategoryRaw(ThingCategoryDef cat)
         {
             if (CategoryCache.TryGetValue(cat, out float cached)) return cached;
@@ -209,6 +223,13 @@ namespace WealthReadout
         // over a stale denominator and produce category shares that do not add up. Taking only the
         // buildings/pawns/floors remainder from vanilla, and the items half from our own pass, is
         // internally consistent.
+        //
+        // Residual drift accepted: itemsTotal refreshes on this mod's own StalenessTicks
+        // (1000 ticks) while the nonItems remainder refreshes on vanilla's MinCountInterval
+        // (5000 ticks), so the two terms can still come from moments up to that far apart.
+        // This is strictly smaller than the inconsistency the design already rejected above
+        // (taking the whole total from vanilla, up to a full 5000-tick gap), and is accepted
+        // deliberately rather than fixed.
         public static float Denominator
         {
             get

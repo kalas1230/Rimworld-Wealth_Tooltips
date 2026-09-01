@@ -82,11 +82,23 @@ namespace WealthReadout
 
                 float parent = WealthIndex.WealthOf(cat);
 
+                // Do NOT sum WealthIndex.WealthOf(childCategory) here. WealthOf(cat) runs
+                // WealthOfCategoryRaw bottom-up, which populates CategoryCache for every
+                // descendant category as a side effect of computing parent's own total. A
+                // subsequent WealthOf(childCategory) call then just reads that cache entry
+                // back -- the exact float already summed inside parent's own computation --
+                // so that comparison is against itself and can never catch a broken
+                // recursion. Instead walk cat.DescendantThingDefs, vanilla's own independent
+                // enumeration (ThingCategoryDef.ThisAndChildCategoryDefs recursing
+                // childCategories), and sum WealthOf(ThingDef) -- the untouched,
+                // cache-independent per-def dictionary -- over it. DescendantThingDefs
+                // yields duplicates rather than deduping (the dedup is a separate private
+                // field, allChildThingDefsCached), which matches the double-counting
+                // semantics of the childCategories recursion in WealthOfCategoryRaw, so a
+                // mismatch here is a genuine bug and not a semantic difference between paths.
                 float sum = 0f;
-                for (int i = 0; i < cat.childThingDefs.Count; i++)
-                    sum += WealthIndex.WealthOf(cat.childThingDefs[i]);
-                for (int j = 0; j < cat.childCategories.Count; j++)
-                    sum += WealthIndex.WealthOf(cat.childCategories[j]);
+                foreach (ThingDef def in cat.DescendantThingDefs)
+                    sum += WealthIndex.WealthOf(def);
 
                 checkedCount++;
                 if (Mathf.Abs(parent - sum) > 0.5f)
@@ -108,15 +120,43 @@ namespace WealthReadout
         {
             Map map = Find.CurrentMap;
             if (map == null) return;
+
+            // Same reasoning as ReconcileIndex above: ForceRecount folds pocket-map wealth
+            // into vanilla's WealthItems/WealthTotal, but WealthIndex.Rebuild walks this map
+            // only. On a world with pocket maps our itemsTotal and vanilla's WealthItems are
+            // measuring different scopes, so the equality check below would fail spuriously
+            // even when Denominator is computed correctly. Bail before computing or logging
+            // any verdict.
+            if (Find.World.pocketMaps.Count > 0)
+            {
+                Log.Message("[Wealth Readout] Denominator check: SKIPPED -- this world has " +
+                            "pocket maps, which WealthWatcher.ForceRecount folds into " +
+                            "WealthItems/WealthTotal but our walk does not. Re-run this check " +
+                            "on a colony without pocket maps.");
+                return;
+            }
+
+            // Force both sides onto the same tick before comparing, same as ReconcileIndex.
             map.wealthWatcher.ForceRecount();
             WealthIndex.Rebuild(map);
 
+            WealthWatcher ww = map.wealthWatcher;
+            float itemsTotal = WealthIndex.ItemsTotal;
+            float nonItems = ww.WealthTotal - ww.WealthItems;
             float denom = WealthIndex.Denominator;
-            float items = WealthIndex.ItemsTotal;
-            bool pass = denom > 0f && items <= denom + 1f;
+            float diff = denom - ww.WealthTotal;
 
-            Log.Message($"[Wealth Readout] Denominator={denom:F2} items={items:F2} " +
-                        $"buildings+pawns+floors={(denom - items):F2} -> {(pass ? "PASS" : "FAIL")}");
+            // With both sides on the same tick and no pocket maps in play, our itemsTotal
+            // should equal vanilla's WealthItems, so Denominator (itemsTotal + nonItems)
+            // should equal vanilla's WealthTotal up to float summation order. A real mismatch
+            // here means the Denominator formula itself is wrong, not a staleness artifact --
+            // unlike the old items<=denom+1 check, which was true by construction because
+            // WealthTotal's non-items remainder can never be negative.
+            bool pass = Mathf.Abs(diff) < 1f;
+
+            Log.Message($"[Wealth Readout] Denominator={denom:F2} itemsTotal={itemsTotal:F2} " +
+                        $"nonItems={nonItems:F2} vanillaWealthTotal={ww.WealthTotal:F2} " +
+                        $"diff={diff:F2} -> {(pass ? "PASS" : "FAIL")}");
         }
     }
 }
