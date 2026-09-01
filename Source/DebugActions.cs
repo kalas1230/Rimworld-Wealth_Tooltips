@@ -297,5 +297,29 @@ namespace WealthReadout
             bool pass = keysResolved && structureOk && englishOk;
             Log.Message($"[Wealth Readout] Sample tooltips: {(pass ? "PASS" : "FAIL")}");
         }
+
+        // Verification item 6. The rebuild is one full-map walk -- the same pass WealthWatcher runs
+        // every 5000 ticks -- so the question is not whether it is cheap but whether one of them
+        // inside a single frame is survivable on a heavy map.
+        [DebugAction(Category, "Profile index rebuild",
+            allowedGameStates = AllowedGameStates.PlayingOnMap)]
+        private static void ProfileRebuild()
+        {
+            Map map = Find.CurrentMap;
+            if (map == null) return;
+
+            // Warm once so the measurement is not dominated by first-call JIT.
+            WealthIndex.Rebuild(map);
+
+            var sw = new System.Diagnostics.Stopwatch();
+            const int runs = 20;
+            sw.Start();
+            for (int i = 0; i < runs; i++) WealthIndex.Rebuild(map);
+            sw.Stop();
+
+            double perRun = sw.Elapsed.TotalMilliseconds / runs;
+            Log.Message($"[Wealth Readout] Rebuild: {perRun:F2} ms/run over {runs} runs " +
+                        $"(map {map.Size.x}x{map.Size.z}, wealth {map.wealthWatcher.WealthTotal:F0})");
+        }
     }
 }
