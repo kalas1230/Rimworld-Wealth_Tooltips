@@ -42,7 +42,7 @@ patch the same methods without either mod breaking the other. A transpiler would
 
 ---
 
-## Read this first: three traps
+## Read this first: four traps
 
 **1. The wealth walk must be mirrored exactly, or the mod is silently wrong.**
 
@@ -65,6 +65,30 @@ walks everything haulable, stored or not, including pawn inventories and contain
 So the row says 240 and the truth is 310, and whole categories — weapons, apparel, art, furniture —
 have no row at all because they are not `CountAsResource`. Do not "fix" the row count to match. The
 tooltip reports true wealth and names the gap; that is the decision.
+
+**4. A readout row is not the head of its category subtree.**
+
+`ResourceReadout` builds its top level from *every* category with `resourceReadoutRoot`, and both
+the drawing and the counting then refuse to descend into another root:
+
+```csharp
+Listing_ResourceReadout.DoCategoryChildren:
+    if (!childCategoryNode.catDef.resourceReadoutRoot) DoCategory(...);
+ResourceCounter.GetCountIn:
+    if (!cat.childCategories[j].resourceReadoutRoot) num += GetCountIn(...);
+```
+
+In Core, `Foods`, `FoodMeals` and `FoodRaw` are all three roots, and the latter two are children of
+`Foods`. So the **Foods row covers only the defs sitting directly in Foods** — Biotech's baby food
+and hemogen packs. Meals and raw food are separate rows, siblings rather than contents.
+
+This shipped wrong: the rollups recursed into every child category, so a colony with 2,471 stored
+under Foods was told **"46,642 elsewhere"** — roughly 49k of rice and meat swept in from rows that
+Foods does not represent. The tooltip's own three numbers were describing three different scopes.
+
+The rule: **a row's scope is its own `childThingDefs` plus its NON-root child categories,
+transitively.** Wealth, total count and vanilla's stored count must all be taken over that one def
+set. `WealthIndex.CategoryDefs` is that set; do not restate the rule anywhere else.
 
 **3. "On hover" cannot mean "per frame."**
 
@@ -228,6 +252,21 @@ kept separate from the Varied Pawns mod.
 
 ---
 
+## Why the test did not catch trap 4
+
+The "Check category subtree summing" action compared the rollups against `cat.DescendantThingDefs`,
+which recurses every child category — including `resourceReadoutRoot` ones. That is *our* traversal
+assumption, not vanilla's. The check therefore restated the bug and agreed with it across a full
+implementation cycle.
+
+It now makes two comparisons, and the second is the one with teeth: `WealthIndex.StoredCountOf`
+sums vanilla's own per-def counts over our def set, and must equal `ResourceCounter.GetCountIn`,
+which vanilla computes by its own independent recursion. One side of that equation is not ours, so
+a traversal that drifts fails immediately.
+
+**The general lesson, and it is the same one as the `ClearTooltipsFrom` bug:** a check written from
+the same understanding as the code tests nothing. Anchor every check to a vanilla-computed number.
+
 ## Open items
 
 1. **Profile the staleness constant.** Highest priority. No setting exists to escape a bad value.
@@ -244,3 +283,10 @@ kept separate from the Varied Pawns mod.
    construction on every version bump.
 4. **Conflict test against other readout mods.** Postfixes are friendly here, but verify rather than
    assume.
+
+5. **Freshness asymmetry between `stored` and `elsewhere`.** `ResourceCounter.ShouldCount` excludes
+   `IsNotFresh()` things from the stored count; `CalculateWealthItems` has no freshness test at all,
+   so rotting food is wealth. A stack rotting *inside* a stockpile therefore leaves `stored` but
+   stays in our total, and surfaces as `elsewhere` while sitting in a stockpile. Small on a tidy
+   map, not small on one with a lot of spoilage. Decide whether the wording should acknowledge it;
+   do not "fix" it by filtering our walk, which would break trap 1.

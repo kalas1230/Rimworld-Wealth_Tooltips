@@ -183,6 +183,35 @@ namespace WealthReadout
             CategoryCountCache.Clear();
         }
 
+        // ScopeOfARow -- what a readout row actually covers, and why the rollups skip
+        // resourceReadoutRoot children.
+        //
+        // ResourceReadout builds its top level from EVERY category with resourceReadoutRoot set:
+        //     RootThingCategories = AllDefs.Where(cat => cat.resourceReadoutRoot).ToList();
+        //     foreach root: listing.DoCategory(root.treeNode, 0, 32);
+        // and both the drawing and the counting then refuse to descend into another root:
+        //     Listing_ResourceReadout.DoCategoryChildren:
+        //         if (!childCategoryNode.catDef.resourceReadoutRoot) DoCategory(...);
+        //     ResourceCounter.GetCountIn:
+        //         if (!cat.childCategories[j].resourceReadoutRoot) num += GetCountIn(...);
+        //
+        // So a root category is NOT the head of its whole def subtree. In vanilla Core, Foods,
+        // FoodMeals and FoodRaw are all three roots, and FoodMeals/FoodRaw are children of Foods.
+        // The Foods ROW therefore covers only the defs sitting directly in Foods (Biotech's baby
+        // food and hemogen packs) -- meals and raw food are separate rows of their own, drawn as
+        // siblings, not as part of Foods.
+        //
+        // A rollup that recursed into every child category would attribute the entire food supply
+        // to the Foods row. That is not hypothetical: it shipped, and a colony with 2,471 stored
+        // under Foods was told "46,642 elsewhere" because the rollup had swept in ~49k of rice and
+        // meat that the row does not represent and vanilla does not count there.
+        //
+        // The rule, stated once: a row's scope is its own childThingDefs plus its NON-root child
+        // categories, transitively. Wealth, total count and vanilla's stored count must all be
+        // taken over that same def set, or the tooltip's three numbers describe three different
+        // things. CategoryDefs below is that def set, and the "Check category subtree summing"
+        // debug action holds the rollups to it against vanilla's own GetCountIn.
+
         // Mirrors ResourceCounter.GetCountIn(ThingCategoryDef): own childThingDefs, then recurse
         // into childCategories. Memoised, because a deep category is otherwise re-walked on every
         // frame of a hover.
@@ -223,6 +252,10 @@ namespace WealthReadout
             }
             for (int j = 0; j < cat.childCategories.Count; j++)
             {
+                // The resourceReadoutRoot skip is vanilla's, not an optimisation -- see
+                // ScopeOfARow below. Omitting it made the Foods row report its whole
+                // subtree while the row itself counted only its direct defs.
+                if (cat.childCategories[j].resourceReadoutRoot) continue;
                 sum += WealthOfCategoryRaw(cat.childCategories[j]);
             }
 
@@ -262,10 +295,45 @@ namespace WealthReadout
             }
             for (int j = 0; j < cat.childCategories.Count; j++)
             {
+                // Same vanilla skip as WealthOfCategoryRaw. See ScopeOfARow.
+                if (cat.childCategories[j].resourceReadoutRoot) continue;
                 sum += TotalCountOfCategoryRaw(cat.childCategories[j]);
             }
 
             CategoryCountCache[cat] = sum;
+            return sum;
+        }
+
+        // The exact def set a readout row covers -- see ScopeOfARow. Yields duplicates rather than
+        // deduping, matching the recursions above and vanilla's GetCountIn, all three of which
+        // count a def once per path that reaches it.
+        //
+        // Not used by the tooltip path: it allocates an enumerator per node and the hover path is
+        // per-frame. It exists so the verification actions can ask "which defs does this row cover"
+        // without restating the traversal rule, which is how the resourceReadoutRoot skip went
+        // missing for a whole implementation cycle -- the old check compared the rollups against
+        // cat.DescendantThingDefs, our own semantics, so it agreed with the bug.
+        public static IEnumerable<ThingDef> CategoryDefs(ThingCategoryDef cat)
+        {
+            for (int i = 0; i < cat.childThingDefs.Count; i++)
+                yield return cat.childThingDefs[i];
+
+            for (int j = 0; j < cat.childCategories.Count; j++)
+            {
+                if (cat.childCategories[j].resourceReadoutRoot) continue;
+                foreach (ThingDef def in CategoryDefs(cat.childCategories[j]))
+                    yield return def;
+            }
+        }
+
+        // Vanilla's stored count for a row, summed over CategoryDefs rather than read from
+        // GetCountIn. Comparing the two is what proves our traversal matches vanilla's: same rule,
+        // same def set, two independent implementations of the sum. Verification only.
+        public static int StoredCountOf(ThingCategoryDef cat, Map map)
+        {
+            int sum = 0;
+            foreach (ThingDef def in CategoryDefs(cat))
+                sum += map.resourceCounter.GetCount(def);
             return sum;
         }
 

@@ -74,42 +74,63 @@ namespace WealthReadout
             WealthIndex.Rebuild(map);
 
             int checkedCount = 0;
-            int failed = 0;
+            int failedInternal = 0;
+            int failedVanilla = 0;
 
             foreach (ThingCategoryDef cat in DefDatabase<ThingCategoryDef>.AllDefsListForReading)
             {
                 if (cat.childCategories.NullOrEmpty() && cat.childThingDefs.NullOrEmpty()) continue;
+                checkedCount++;
 
-                float parent = WealthIndex.WealthOf(cat);
-
+                // Check 1, internal: the memoised rollups must agree with an unmemoised walk of
+                // the same def set.
+                //
                 // Do NOT sum WealthIndex.WealthOf(childCategory) here. WealthOf(cat) runs
                 // WealthOfCategoryRaw bottom-up, which populates CategoryCache for every
-                // descendant category as a side effect of computing parent's own total. A
-                // subsequent WealthOf(childCategory) call then just reads that cache entry
-                // back -- the exact float already summed inside parent's own computation --
-                // so that comparison is against itself and can never catch a broken
-                // recursion. Instead walk cat.DescendantThingDefs, vanilla's own independent
-                // enumeration (ThingCategoryDef.ThisAndChildCategoryDefs recursing
-                // childCategories), and sum WealthOf(ThingDef) -- the untouched,
-                // cache-independent per-def dictionary -- over it. DescendantThingDefs
-                // yields duplicates rather than deduping (the dedup is a separate private
-                // field, allChildThingDefsCached), which matches the double-counting
-                // semantics of the childCategories recursion in WealthOfCategoryRaw, so a
-                // mismatch here is a genuine bug and not a semantic difference between paths.
+                // descendant as a side effect, so a later WealthOf(child) just reads back the
+                // float already summed into the parent -- a comparison against itself that can
+                // never catch a broken recursion. WealthOf(ThingDef) reads the untouched per-def
+                // dictionary instead.
+                //
+                // The enumeration is WealthIndex.CategoryDefs, NOT cat.DescendantThingDefs. That
+                // was the flaw in the previous version of this check: DescendantThingDefs recurses
+                // every child category, including resourceReadoutRoot ones, which is precisely the
+                // rule the rollups had wrong. The check restated our assumption instead of testing
+                // it, and passed while the Foods row over-reported by ~49k items.
+                float parent = WealthIndex.WealthOf(cat);
                 float sum = 0f;
-                foreach (ThingDef def in cat.DescendantThingDefs)
+                foreach (ThingDef def in WealthIndex.CategoryDefs(cat))
                     sum += WealthIndex.WealthOf(def);
 
-                checkedCount++;
                 if (Mathf.Abs(parent - sum) > 0.5f)
                 {
-                    failed++;
-                    Log.Warning($"[Wealth Readout] {cat.defName}: parent={parent:F2} sum={sum:F2}");
+                    failedInternal++;
+                    Log.Warning($"[Wealth Readout] {cat.defName} internal: rollup={parent:F2} walk={sum:F2}");
+                }
+
+                // Check 2, against vanilla: our traversal's def set must be the one the ROW covers.
+                //
+                // This is the check that has teeth. ResourceCounter.GetCountIn computes the number
+                // printed on the row by its own independent recursion; WealthIndex.StoredCountOf
+                // sums vanilla's own per-def counts over the def set our rollups use. If our
+                // traversal rule drifts from vanilla's -- a missing resourceReadoutRoot skip, a
+                // wrongly included subtree -- these two disagree immediately and loudly, because
+                // one of them is not ours.
+                int ours = WealthIndex.StoredCountOf(cat, map);
+                int vanilla = map.resourceCounter.GetCountIn(cat);
+                if (ours != vanilla)
+                {
+                    failedVanilla++;
+                    Log.Error($"[Wealth Readout] {cat.defName} SCOPE MISMATCH: our def set stores " +
+                              $"{ours}, vanilla's GetCountIn says {vanilla}. The row and the " +
+                              $"tooltip are describing different things.");
                 }
             }
 
+            bool pass = failedInternal == 0 && failedVanilla == 0;
             Log.Message($"[Wealth Readout] Category summing: {checkedCount} checked, " +
-                        $"{failed} mismatched -> {(failed == 0 ? "PASS" : "FAIL")}");
+                        $"{failedInternal} internal mismatches, {failedVanilla} vanilla scope " +
+                        $"mismatches -> {(pass ? "PASS" : "FAIL")}");
         }
 
         // Verification of the denominator's shape. The share of the single largest category must be
