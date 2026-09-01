@@ -141,4 +141,45 @@ namespace WealthReadout
             ReadoutPatches.ReplaceTip(rect, text, thingDef.shortHash);
         }
     }
+
+    // Simple (uncategorized) mode does not go through Listing_ResourceReadout at all:
+    // DoReadoutSimple -> DrawResourceSimple -> DrawIcon. DrawIcon is private, hence the string name.
+    //
+    // Vanilla's tip region here covers the 27x27 icon only, not the whole row:
+    //     Rect rect = new Rect(x, y, 27f, 27f);
+    //     if (Mouse.IsOver(rect)) TooltipHandler.TipRegion(rect, taggedString);
+    // We match that rect exactly rather than widening it to the row. Matching vanilla's hover
+    // target is the correct behaviour, not a limitation to fix -- widening it would be a UI change,
+    // which rule 2 forbids.
+    [HarmonyPatch(typeof(ResourceReadout), "DrawIcon")]
+    public static class DrawIcon_Patch
+    {
+        public static void Postfix(float x, float y, ThingDef thingDef)
+        {
+            // Same ordering as DoCategory_Patch/DoThingDef_Patch: cheap rect, gate, then the
+            // expensive work. DrawIcon has no zero-count early return to mirror (it is only called
+            // for defs DrawResourceSimple already decided to draw), so there is no __state/CurHeight
+            // check here -- the rect is simply vanilla's fixed 27x27 icon rect at (x, y).
+            var rect = new Rect(x, y, 27f, 27f);
+            if (!ReadoutPatches.ShouldBuildTipFor(rect)) return;
+
+            Map map = Find.CurrentMap;
+            if (map == null) return;
+
+            float wealth = WealthIndex.WealthOf(thingDef);
+            // WealthIndex.TotalCountOf(ThingDef) does not exist -- see DoThingDef_Patch. CountOf is
+            // the map-wide per-def count.
+            int total = WealthIndex.CountOf(thingDef);
+            int stored = map.resourceCounter.GetCount(thingDef);
+
+            string text = TooltipText.Build(
+                thingDef.LabelCap,
+                wealth,
+                WealthIndex.ShareOf(wealth),
+                stored,
+                WealthIndex.ElsewhereCount(total, stored));
+
+            ReadoutPatches.ReplaceTip(rect, text, thingDef.shortHash);
+        }
+    }
 }
