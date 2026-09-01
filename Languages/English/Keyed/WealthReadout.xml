@@ -3,6 +3,9 @@
   <!-- {0} silver value, {1} share of colony wealth as a percentage -->
   <WealthReadout.Line.Wealth>{0} silver · {1} of colony wealth</WealthReadout.Line.Wealth>
   <!-- {0} count in stockpiles, {1} count anywhere else: on the ground, carried, in containers.
-       "Elsewhere" and not "unstored" on purpose -- most of that remainder has no hauling job. -->
+       "Elsewhere" and not "unstored" on purpose: most of that remainder has no hauling job.
+       (No "- -" without a space anywhere in this file: a double hyphen is illegal inside an XML
+       comment and makes RimWorld discard the whole Keyed file, silently un-translating every key
+       in it.) -->
   <WealthReadout.Line.Split>{0} stored · {1} elsewhere</WealthReadout.Line.Split>
 </LanguageData>
