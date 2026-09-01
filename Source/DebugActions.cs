@@ -233,15 +233,69 @@ namespace WealthReadout
 
         // Formatting only. Runs without a map so it can be exercised from the main menu, which is
         // also the cheapest place to catch a missing translation key.
+        //
+        // This ASSERTS rather than only printing, because the failure it exists to catch is silent:
+        // Translator.Translate returns the raw key string when a key is missing, without throwing
+        // and without logging. So a Keyed file that failed to load -- a typo in a key name, a
+        // LoadFolders path that stopped matching, an XML parse error -- would still produce a
+        // clean-looking run, and the tooltip would read "WealthReadout.Line.Wealth" in game.
+        // Printing alone would leave that to whoever happened to read Player.log carefully.
         [DebugAction(Category, "Print sample tooltips", allowedGameStates = AllowedGameStates.Entry)]
         private static void PrintSampleTooltips()
         {
-            Log.Message("[Wealth Readout] Sample A:\n" +
-                        TooltipText.Build("Foods", 1190f, 0.026f, 240, 70));
-            Log.Message("[Wealth Readout] Sample B (nothing elsewhere):\n" +
-                        TooltipText.Build("Plasteel", 1840f, 0.041f, 460, 0));
-            Log.Message("[Wealth Readout] Sample C (zero wealth):\n" +
-                        TooltipText.Build("Chocolate", 0f, 0f, 0, 0));
+            string a = TooltipText.Build("Foods", 1190f, 0.026f, 240, 70);
+            string b = TooltipText.Build("Plasteel", 1840f, 0.041f, 460, 0);
+            string c = TooltipText.Build("Chocolate", 0f, 0f, 0, 0);
+
+            Log.Message($"[Wealth Readout] Sample A:\n{a}\n\nSample B (nothing elsewhere):\n{b}" +
+                        $"\n\nSample C (zero wealth):\n{c}");
+
+            // Language-independent: an unresolved key leaks its own name into the output, whatever
+            // language is active. This half of the check works on a translated run too.
+            bool keysResolved = true;
+            foreach (string key in new[] { "WealthReadout.Line.Wealth", "WealthReadout.Line.Split" })
+            {
+                if (a.Contains(key) || b.Contains(key) || c.Contains(key))
+                {
+                    keysResolved = false;
+                    Log.Error($"[Wealth Readout] Translation key '{key}' did not resolve -- it is " +
+                              "appearing verbatim in the tooltip. Check that " +
+                              "Languages/English/Keyed/WealthReadout.xml is present, well-formed, " +
+                              "and that the key name matches the string passed to .Translate().");
+                }
+            }
+
+            // Structural checks that also hold under translation: B has no split line because
+            // nothing is elsewhere, A does because 70 are. Catches the suppression logic inverting.
+            bool structureOk = a.Split('\n').Length == 3 && b.Split('\n').Length == 2;
+            if (!structureOk)
+            {
+                Log.Error("[Wealth Readout] Split-line suppression is wrong: sample A (70 " +
+                          "elsewhere) must have 3 lines and sample B (0 elsewhere) must have 2. " +
+                          $"Got {a.Split('\n').Length} and {b.Split('\n').Length}.");
+            }
+
+            // Exact-text comparison only makes sense against the English Keyed file; on any other
+            // active language the expected strings are legitimately different, so it is skipped
+            // rather than reported as a failure.
+            bool englishOk = true;
+            if (LanguageDatabase.activeLanguage == LanguageDatabase.defaultLanguage)
+            {
+                const string expectedA = "Foods\n1,190 silver \u00b7 2.6% of colony wealth\n240 stored \u00b7 70 elsewhere";
+                if (a != expectedA)
+                {
+                    englishOk = false;
+                    Log.Error($"[Wealth Readout] Sample A text mismatch.\nExpected:\n{expectedA}\nGot:\n{a}");
+                }
+            }
+            else
+            {
+                Log.Message("[Wealth Readout] Active language is not English; exact-text comparison " +
+                            "skipped. Key resolution and structure were still checked.");
+            }
+
+            bool pass = keysResolved && structureOk && englishOk;
+            Log.Message($"[Wealth Readout] Sample tooltips: {(pass ? "PASS" : "FAIL")}");
         }
     }
 }
