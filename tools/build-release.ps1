@@ -478,5 +478,9 @@ Write-Host "  $StageDir" -ForegroundColor Green
 Write-Host ""
 Write-Host "Point the Steam uploader at that folder -- not at the repo root." -ForegroundColor Cyan
 if ($zipPath) { Write-Host "Attach $(Split-Path -Leaf $zipPath) to the GitHub Release." -ForegroundColor Cyan }
-Write-Host "Re-run the Wealth Readout debug actions against this DLL before publishing." -ForegroundColor Cyan
+# The debug harness was deleted on 2026-09-02, so there is no longer an in-game action
+# to re-run here. What replaces it is smaller and manual, and it is the one check no
+# build-time gate can make: whether the game still loads and patches the mod at all.
+Write-Host "Before publishing, load this DLL in game once. Confirm '[Wealth Readout] Patches" -ForegroundColor Cyan
+Write-Host "applied.' in Player.log, then hover one readout row." -ForegroundColor Cyan
 Write-Host ""
