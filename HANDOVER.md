@@ -394,8 +394,12 @@ artefacts the earlier ones produce.
      landscape, so it will letterbox with large empty side bars. A purpose-made image around
      640x360 would present far better. The two screenshots are fine as *gallery* images and are
      kept at `docs/workshop-images/`.
-   - `About/ModIcon.png` is absent (the mod list row icon). Cosmetic; the staging script warns
-     rather than blocks.
+   - `About/ModIcon.png` — **skipped, decided 2026-09-03. Not an open item; do not reopen it as
+     one.** RimWorld draws its default icon on the mod list row when the file is absent, which is
+     what the majority of Workshop mods ship. It affects one 32px row in the mod list and nothing
+     a player sees while playing. The staging script's warning stays as a warning precisely
+     because this is a choice, not an oversight — expect it on every run and ignore it. Add one
+     later if the mod list row ever looks wrong next to its neighbours.
 
 5. **Double check that only the mod is in the folder that gets published.** Run
    `.\tools\build-release.ps1 -Check`. It re-derives the expected file set from the repo,
