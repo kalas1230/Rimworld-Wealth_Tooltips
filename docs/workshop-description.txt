@@ -1,0 +1,26 @@
+Maintainer notes -- everything ABOVE the divider is private and never reaches Steam.
+
+This file is the source of truth for the Workshop listing. tools\build-release.ps1 derives
+Release\upload\description-paste.txt from everything below the divider; paste that file, not
+this one. Keep it short on purpose: the Workshop listing is read at a glance, and the fuller
+in-game text lives in About\About.xml's <description>. If what the mod does changes, change both.
+
+Steam BBCode is supported ([b], [i], [list]) but plain text reads better at this length.
+
+==========
+
+Hover a row in the resource readout. See what it is worth.
+
+The tooltip adds three things: the item or category's value in silver, its share of your colony's
+total wealth, and how much of it is stored versus sitting elsewhere; on the ground, in pawn
+inventories, inside containers.
+
+Wealth drives raid size, and the readout alone will not tell you which pile is doing the damage. 
+There are better mods suited for this task if this is what you are looking for.
+This mod puts the answer where you are already looking, without opening a window.
+
+Tooltips only. Nothing is added to the panel, nothing moves, nothing is resized. The wealth figure
+is vanilla's own.
+
+Safe to add to any save and safe to remove from any save: the mod writes nothing into your save
+file. Works in both the categorized and simple readout modes. Requires Harmony.

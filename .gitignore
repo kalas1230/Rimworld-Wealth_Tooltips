@@ -1,7 +1,32 @@
+# IDE
 .idea/
-[Bb]in/
-[Oo]bj/
+.vs/
+*.suo
 *.user
-zzz-Do-Not-Commit/
+*.userosscache
+*.sln.docstates
+
+# Build results
+bin/
+obj/
 Assemblies/
+*.dll.mdb
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
 *.log
+temp/
+
+# Upload staging: regenerated wholesale by tools\build-release.ps1.
+# Never hand-edit anything under here -- it is destroyed on the next run.
+Release/
+
+# Scratch and dumps. Tracked here rather than in .git/info/exclude on purpose:
+# exclude is local to one working copy and is not inherited by a clone, so the
+# protection would not travel with the repo. build-release.ps1's forbidden-content
+# check is the second line of defence.
+zzz-Do-Not-Commit/
+__pycache__/
