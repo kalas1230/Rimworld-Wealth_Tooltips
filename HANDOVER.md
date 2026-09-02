@@ -4,7 +4,8 @@ Why this mod is shaped the way it is. The spec at
 `docs/superpowers/specs/2026-09-01-wealth-readout-design.md` says *what* to build. This file says
 *why*, and records what was already tried and rejected so it is not rediscovered at cost.
 
-Started 2026-09-01. No code exists yet.
+Started 2026-09-01. **Published to the Steam Workshop 2026-09-03 as item `3794706756`** — see the
+"Published" section for how an update differs from that first upload.
 
 **All vanilla code claims here were verified against an ILSpy decompile of 1.6
 `Assembly-CSharp.dll`.** Where a claim is unverified, it says so.
@@ -88,7 +89,8 @@ Foods does not represent. The tooltip's own three numbers were describing three 
 
 The rule: **a row's scope is its own `childThingDefs` plus its NON-root child categories,
 transitively.** Wealth, total count and vanilla's stored count must all be taken over that one def
-set. `WealthIndex.CategoryDefs` is that set; do not restate the rule anywhere else.
+set. `WealthOfCategoryRaw` and `TotalCountOfCategoryRaw` both traverse by that rule, as does
+vanilla's own `ResourceCounter.GetCountIn`; do not restate the rule anywhere else.
 
 **3. "On hover" cannot mean "per frame."**
 
@@ -335,131 +337,102 @@ A save loaded with a partial modlist reaches the cap during load, before any act
 So the empty-log rule has a second cause beyond startup timing: **check Player.log for the
 `max messages limit` line before concluding an action produced no output.**
 
-## Next steps, in order
+## Published 2026-09-03
 
-Publishing sequence agreed 2026-09-02. Do these in order: several later steps depend on
-artefacts the earlier ones produce.
+**Workshop item `3794706756`.** `https://steamcommunity.com/sharedfiles/filedetails/?id=3794706756`
 
-1. **User reviews the code. — DONE 2026-09-02.** Reviewed by the owner, and the tree is committed.
+Source: `https://github.com/kalas1230/Rimworld-Wealth_Tooltips`, branch `main`, tag `v1.0.0`.
 
-   The working tree was uncommitted when this step was written; it no longer is. Six commits
-   landed: the publish scaffolding, the packageId rename, the `StalenessTicks` measurement, the
-   debug-harness removal, this document, and the staging script's stale harness pointer. The
-   upload now corresponds to a commit someone can check out, so `build-release.ps1`'s
-   dirty-tree warning is silent.
+The eight-step publishing sequence this section used to hold is done and is not reproduced. What
+follows is only what a future session needs: how an **update** differs from that first publish,
+and the three things that will bite whoever does one.
 
-   Two changes to the repo itself came with it, and they are worth knowing before you push:
+### 1. The uploader is the in-game one, and it ships `Mods\`, not `Release\`
 
-   - **The remote exists**: `origin` is `https://github.com/kalas1230/Rimworld-Wealth_Tooltips.git`.
-     Nothing has been pushed yet. Step 3 below still stands — the *page* has to be created and
-     `<url>` added to `About.xml`.
-   - **Every commit SHA changed.** All 28 commits were rewritten to author and commit as
-     `kalas1230 <gokalpxd@gmail.com>`; twelve had been made under a different identity. Any SHA
-     written down elsewhere before 2026-09-02 is dead. The ones in this file were updated with
-     it. Identity is now pinned for every repo under `Desktop\Rimworld-mod` by an `includeIf`
-     in the global git config, so this cannot recur here.
+The mod was published from RimWorld's own **Mods menu → upload**, not the standalone Steam tool
+the earlier draft of this section assumed. That difference is load-bearing and easy to miss:
 
-2. **Run a last in-game test.** Every in-game verification in this file was performed under the
-   old `kalas.wealthreadout` packageId and the old Harmony instance id. Both were renamed on
-   2026-09-02, the assembly was rebuilt, and the game has not been launched since.
+- **What uploads is `RimWorld\Mods\WealthTooltips\`**, the *installed* copy — not
+  `Release\Wealth Tooltips\`. The staging folder is still worth building, because
+  `build-release.ps1 -Check` is the only thing that proves the installed copy is what the repo
+  says. But staging is the *reference*, not the payload. Stage, verify, copy the staged folder
+  over the installed one, then upload.
+- **The installed copy is a plain directory, not a junction.** Nothing propagates on its own. A
+  rebuild that is not copied across means you test and ship yesterday's DLL — this happened
+  once, and only the byte-size difference gave it away.
+- **The DLL cannot be overwritten while RimWorld is running.** The copy fails with
+  `user-mapped section open`. Close the game first, or notice that one file silently did not
+  update.
 
-   That rename already produced one silent breakage: an illegal `--` inside an XML comment left
-   `About.xml` unparseable, and RimWorld skips a mod whose `About.xml` will not parse, so it
-   would have installed and done nothing. The only visible symptom was the release zip quietly
-   falling back to a `-dev` filename because `modVersion` could not be read. A preflight parse
-   check now guards that specific fault, but the general point stands: **a clean build says
-   nothing about whether the game still loads and patches the mod under its new identity.**
+### 2. An upload overwrites the Workshop description from `About.xml`
 
-   Launch once, confirm `[Wealth Readout] Patches applied.` in Player.log, and hover one readout
-   row. Two minutes, and it covers the one thing no build-time check can.
+RimWorld sends `About.xml`'s `<description>` as the listing text on **every** upload, not only
+the first. The long Workshop copy is therefore destroyed by each update and must be re-pasted:
 
-3. **Create the GitHub page for the mod.** This repo has no remote. Two things depend on it and
-   both must be done *before* step 4, because they change the file that gets shipped:
-   - Add `<url>` to `About/About.xml`. RimWorld renders it as a clickable link in the mod info
-     panel, and it is the only route back to source for a player who installed from a modpack.
-   - Add the source and bug-report link to the end of the Workshop description
-     (`docs/workshop-description.txt`), which mod managers and modpack listings show instead of
-     the `<url>` field.
+1. Edit `docs/workshop-description.txt`.
+2. Run `.\tools\build-release.ps1 -Zip`.
+3. Paste `Release\upload\description-paste.txt` into the Steam listing, **after** uploading.
 
-4. **Double check the Steam description and the PNGs, especially the in-game description shown
-   on the mod page.** Three separate texts exist and they drift apart if edited singly:
-   - `About/About.xml` `<description>` is the **in-game** mod list text.
-   - `docs/workshop-description.txt` (below the `====` divider) is the **Workshop** listing.
-   - `Release/upload/description-paste.txt` is generated from the file above. Paste that one, not
-     the source file, and never a hand-copy: hand-copies of this text previously accumulated 22
-     mojibake sequences in the sibling repo before the script took ownership of it.
+This is the one place the paste pipeline genuinely earns its keep. For a small edit — a fixed
+typo, one added link — typing straight into the Steam box and mirroring the same edit back into
+`docs/workshop-description.txt` is fine and faster; the script does no content transformation,
+it only strips the maintainer notes above the `====` divider and writes UTF-8 without a BOM.
+What is *not* optional is the mirroring: if the repo copy falls behind, the next full re-paste
+silently reverts whatever was typed live.
 
-   Known image issues, both open:
-   - `About/Preview.png` is **374x638, portrait**. Steam renders the Workshop thumbnail
-     landscape, so it will letterbox with large empty side bars. A purpose-made image around
-     640x360 would present far better. The two screenshots are fine as *gallery* images and are
-     kept at `docs/workshop-images/`.
-   - `About/ModIcon.png` — **skipped, decided 2026-09-03. Not an open item; do not reopen it as
-     one.** RimWorld draws its default icon on the mod list row when the file is absent, which is
-     what the majority of Workshop mods ship. It affects one 32px row in the mod list and nothing
-     a player sees while playing. The staging script's warning stays as a warning precisely
-     because this is a choice, not an oversight — expect it on every run and ignore it. Add one
-     later if the mod list row ever looks wrong next to its neighbours.
+**BBCode belongs in the Workshop text only.** `docs/workshop-description.txt` uses
+`[url=...]label[/url]`; `About.xml` is rendered as plain text by RimWorld and would show the
+tags literally in the mod list.
 
-5. **Double check that only the mod is in the folder that gets published.** Run
-   `.\tools\build-release.ps1 -Check`. It re-derives the expected file set from the repo,
-   hashes every staged file against its source, and fails on anything stale, missing or
-   unexpected. It exists because a staged folder is a build output with an indefinite shelf life
-   sitting in exactly the folder the uploader is pointed at, and `Release/` is gitignored, so
-   nothing in git tracks whether it is current.
+### 3. `About/PublishedFileId.txt` is the one irreplaceable file
 
-   Expected contents, and nothing else:
+Written by the uploader into `RimWorld\Mods\WealthTooltips\About\` — *outside the repo*. It was
+copied back and committed (`bd23cf9`). It binds this folder to Workshop item `3794706756`.
 
-   ```
-   About/About.xml   About/LoadFolders.xml   About/Preview.png
-   Assemblies/WealthReadout.dll   Languages/English/Keyed/WealthReadout.xml   LICENSE
-   ```
+Without it an upload does not update the item, it creates a **second, duplicate** one, and the
+original cannot be reclaimed. Never delete it. After any future upload, check whether the
+uploader rewrote the copy in `Mods\` and, if so, copy it back.
 
-   Point the Steam uploader at `Release\Wealth Tooltips\`, never at the repo root.
+### Housekeeping settled during publishing
 
-   **Run once on 2026-09-02, and it failed as it should.** File set clean — 6 staged, 6
-   expected, nothing missing, nothing extra, no dev content leaked. One file stale:
-   `Assemblies\WealthReadout.dll`, staged at 24,064 bytes against a freshly built 10,752. That
-   drop is the debug harness coming out, so the staged copy is a pre-removal build carrying all
-   eight debug actions — exactly the "indefinite shelf life" failure this check exists for.
+- **`ModIcon.png` is skipped on purpose, decided 2026-09-03. Not an open item; do not reopen it
+  as one.** RimWorld draws its default icon on the mod list row when the file is absent, which
+  is what most Workshop mods ship, and it affects one 32px row and nothing seen in play.
+  `build-release.ps1` warns on every run; the warning is expected, not actionable.
+- **`Preview.png` is the category-tooltip capture, 375x104.** It shows the real product but sits
+  small in Steam's thumbnail frame. Replacing it with a purpose-made 1024x576 is a drop-in at
+  the same path; Varied Pawns generates its own with `tools/make-preview.ps1`, which is the
+  obvious thing to port if it is ever worth doing.
+- **Git identity is pinned by path.** An `includeIf.gitdir` in the global config points every
+  repo under `Desktop\Rimworld-mod` at `Desktop\Rimworld-mod\.gitconfig`, which sets
+  `kalas1230 <gokalpxd@gmail.com>`. The global identity is a different account and is left
+  alone. Twelve commits were originally authored under it and the whole history was rewritten
+  on 2026-09-02 to fix that, which is why **every SHA in this repo older than that date is
+  dead**.
+- **Push needs the username in the remote URL.** `origin` is
+  `https://kalas1230@github.com/...`; without the `kalas1230@` the credential manager resolves
+  the other account and the push fails with `403 denied to Gokalp-Alb`.
 
-   **Do not restage yet.** The obvious response is the `-Build -Zip` the script suggests, and
-   it is premature: `About.xml` has no `<url>` element until step 3, and that file ships, so
-   anything staged now goes stale the moment the link is added. Restage after steps 3 and 4,
-   then re-run this and expect green.
+### Still open from the sequence
 
-   One cosmetic artifact: the check's header reads `from commit 79ee0f7`, a SHA that no longer
-   exists after the authorship rewrite. It is recorded staging metadata and regenerates on the
-   next stage. Nothing to fix.
+**Cross-linking is half done.** Wealth Tooltips' Workshop description links to Varied Pawns and
+to the GitHub repo. **Varied Pawns does not link back** — neither its
+`docs/workshop-description.txt` nor its `About.xml` mentions this mod. Do that in *that* repo,
+through its `docs/workshop-description.txt`, then re-run its `build-release.ps1` and paste.
 
-6. **Create the Steam page and publish.** After the first successful upload RimWorld writes
-   `About/PublishedFileId.txt`. **Commit that file and never delete it.** It is what binds this
-   folder to the Workshop item; without it the next upload creates a *second, duplicate* item
-   instead of updating the first, and the original cannot be reclaimed.
+Note that **Perceived Wealth** is a third, design-only sibling with no code and nothing
+published. It is not part of this cross-linking; do not advertise it.
 
-7. **Create a GitHub release.** Tag it to match `About/About.xml`'s `<modVersion>` (currently
-   1.0.0) and attach `Release/WealthTooltips-<version>.zip`, which
-   `build-release.ps1 -Zip` produces. Bump `<modVersion>` on every subsequent Workshop update:
-   RimWorld ignores the field, but mod managers display it and the zip is named from it.
+### Before any future update
 
-8. **Cross-link the two mods, and put the GitHub link at the end of both descriptions.**
-   Last, because it needs URLs that do not exist until the earlier steps are done: the Workshop
-   item is only created in step 6, and the repo only gets a URL in step 3.
+Bump `<modVersion>` in `About.xml`. RimWorld ignores it, but mod managers display it and
+`build-release.ps1` names the zip from it — without a readable value the zip lands as
+`WealthTooltips-dev.zip`. Then tag the GitHub release to match, and attach the zip that
+`-Zip` produces.
 
-   - Add a link to **Wealth Tooltips** in **Varied Pawns**' description.
-   - Add a link to **Varied Pawns** in **Wealth Tooltips**' description.
-   - Add the GitHub link at the end of both.
-
-   Edit the descriptions through each repo's `docs/workshop-description.txt` and re-run that
-   repo's `tools/build-release.ps1`, then paste the regenerated
-   `Release/upload/description-paste.txt`. Do not type the change straight into the Steam
-   description box: the repo file is the source of truth, and editing only the live listing is
-   exactly how the two copies drift apart. Both mods keep an in-game `About.xml` `<description>`
-   as well, so decide per link whether it belongs in the Workshop text, the in-game text, or
-   both, and change every copy you choose.
-
-   Note that **Perceived Wealth** is a third, design-only sibling with no code and nothing
-   published. It is not part of this cross-linking; do not advertise it.
+Cut the zip with `-Zip` **alone**, never `-Build -Zip`, once the DLL has been tested. A rebuild
+produces a different assembly from identical source — C# builds are not byte-reproducible — and
+retroactively invalidates the verification you just did.
 
 ## Open items
 
