@@ -207,7 +207,8 @@ namespace WealthReadout
             //
             // If this reconstruction ever drifts from DrawIcon's, the id stops matching and the
             // player sees two stacked tooltips rather than one replaced -- visible, not silent.
-            // "Check simple-mode tooltip id" in DebugActions is the check for exactly that.
+            // Check it by hovering a resource icon with the readout in simple (non-categorized)
+            // mode: one tooltip means the ids still match.
             ReadoutPatches.ReplaceTip(rect, text, ReadoutPatches.SimpleIconTipId(thingDef));
         }
     }

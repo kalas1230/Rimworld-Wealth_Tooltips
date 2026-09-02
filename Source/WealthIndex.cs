@@ -35,11 +35,6 @@ namespace WealthReadout
 
         private static readonly List<Thing> tmpThings = new List<Thing>();
 
-        public static float ItemsTotal
-        {
-            get { EnsureFresh(); return itemsTotal; }
-        }
-
         public static float WealthOf(ThingDef def)
         {
             EnsureFresh();
@@ -211,8 +206,9 @@ namespace WealthReadout
         // The rule, stated once: a row's scope is its own childThingDefs plus its NON-root child
         // categories, transitively. Wealth, total count and vanilla's stored count must all be
         // taken over that same def set, or the tooltip's three numbers describe three different
-        // things. CategoryDefs below is that def set, and the "Check category subtree summing"
-        // debug action holds the rollups to it against vanilla's own GetCountIn.
+        // things. WealthOfCategoryRaw and TotalCountOfCategoryRaw below both traverse by that
+        // rule, and vanilla's own ResourceCounter.GetCountIn -- which supplies the stored figure
+        // -- traverses by it too. All three must keep the same skip, or they diverge silently.
 
         // Mirrors ResourceCounter.GetCountIn(ThingCategoryDef): own childThingDefs, then recurse
         // into childCategories. Memoised, because a deep category is otherwise re-walked on every
@@ -268,8 +264,7 @@ namespace WealthReadout
         // Mirrors ResourceCounter.GetCountIn(ThingCategoryDef): own childThingDefs, then recurse
         // into childCategories. Exists for the categorized-readout tooltips (DoCategory_Patch in
         // ReadoutPatches.cs, Task 6), which need a category's total item count across its whole
-        // subtree to compute ElsewhereCount against ResourceCounter.GetCountIn. Also exercised by
-        // the "Report stored vs elsewhere (category)" action in DebugActions.cs.
+        // subtree to compute ElsewhereCount against ResourceCounter.GetCountIn.
         public static int TotalCountOf(ThingCategoryDef cat)
         {
             EnsureFresh();
@@ -280,11 +275,11 @@ namespace WealthReadout
         // EnsureFresh runs once per public call instead of once per node of the recursion.
         //
         // Memoised via CategoryCountCache, mirroring WealthOfCategoryRaw. This was NOT memoised
-        // before Task 6: the only caller was ReportStoredVsElsewhereCategory in DebugActions.cs,
-        // run on demand from the dev menu, not 60 times a second. Task 6's DoCategory_Patch is
-        // now a per-frame caller -- it runs on every Repaint while the mouse rests on a category
-        // row -- so the recursion's cost would otherwise compound with subtree depth on every
-        // frame of a hover, exactly like WealthOfCategoryRaw's own justification above.
+        // before Task 6, when the only caller was an on-demand dev-menu action rather than
+        // anything running 60 times a second. Task 6's DoCategory_Patch is now a per-frame
+        // caller -- it runs on every Repaint while the mouse rests on a category row -- so the
+        // recursion's cost would otherwise compound with subtree depth on every frame of a
+        // hover, exactly like WealthOfCategoryRaw's own justification above.
         private static int TotalCountOfCategoryRaw(ThingCategoryDef cat)
         {
             if (CategoryCountCache.TryGetValue(cat, out int cached)) return cached;
@@ -303,39 +298,6 @@ namespace WealthReadout
             }
 
             CategoryCountCache[cat] = sum;
-            return sum;
-        }
-
-        // The exact def set a readout row covers -- see ScopeOfARow. Yields duplicates rather than
-        // deduping, matching the recursions above and vanilla's GetCountIn, all three of which
-        // count a def once per path that reaches it.
-        //
-        // Not used by the tooltip path: it allocates an enumerator per node and the hover path is
-        // per-frame. It exists so the verification actions can ask "which defs does this row cover"
-        // without restating the traversal rule, which is how the resourceReadoutRoot skip went
-        // missing for a whole implementation cycle -- the old check compared the rollups against
-        // cat.DescendantThingDefs, our own semantics, so it agreed with the bug.
-        public static IEnumerable<ThingDef> CategoryDefs(ThingCategoryDef cat)
-        {
-            for (int i = 0; i < cat.childThingDefs.Count; i++)
-                yield return cat.childThingDefs[i];
-
-            for (int j = 0; j < cat.childCategories.Count; j++)
-            {
-                if (cat.childCategories[j].resourceReadoutRoot) continue;
-                foreach (ThingDef def in CategoryDefs(cat.childCategories[j]))
-                    yield return def;
-            }
-        }
-
-        // Vanilla's stored count for a row, summed over CategoryDefs rather than read from
-        // GetCountIn. Comparing the two is what proves our traversal matches vanilla's: same rule,
-        // same def set, two independent implementations of the sum. Verification only.
-        public static int StoredCountOf(ThingCategoryDef cat, Map map)
-        {
-            int sum = 0;
-            foreach (ThingDef def in CategoryDefs(cat))
-                sum += map.resourceCounter.GetCount(def);
             return sum;
         }
 
@@ -362,12 +324,14 @@ namespace WealthReadout
         // internally consistent.
         //
         // Residual drift accepted: itemsTotal refreshes on this mod's own StalenessTicks while
-        // the nonItems remainder refreshes on vanilla's MinCountInterval. At the current value the
-        // two intervals are the same length but not in phase, so the terms can still come from
-        // moments up to 5000 ticks apart. What the split still buys is that the numerator and the
-        // itemsTotal half of the denominator come from one pass and always agree with each other --
-        // shares add up -- which is exactly what taking the whole total from vanilla loses.
-        // Lowering StalenessTicks after profiling shrinks this gap; it is accepted, not fixed.
+        // the nonItems remainder refreshes on vanilla's MinCountInterval. Since profiling lowered
+        // StalenessTicks to 2500 against vanilla's 5000, our half is now the fresher of the two and
+        // the worst-case spread between the terms is vanilla's 5000-tick interval, not the sum of
+        // both. What the split buys is unchanged: the numerator and the itemsTotal half of the
+        // denominator come from one pass and always agree with each other -- shares add up --
+        // which is exactly what taking the whole total from vanilla loses. The residual gap is
+        // accepted, not fixed; it is bounded by vanilla's own recount cadence and cannot be closed
+        // from this side.
         public static float Denominator
         {
             get
