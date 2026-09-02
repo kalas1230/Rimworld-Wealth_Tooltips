@@ -1,7 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ModMetaData>
-  <packageId>kalas.wealthreadout</packageId>
-  <name>Wealth Readout</name>
+  <!-- Renamed from kalas.wealthreadout on 2026-09-02, while the mod was still unpublished.
+       packageId is the mod's identity. ModsConfig.xml, other mods' loadAfter and dependency
+       entries, and the Workshop item all key off it, so renaming it after release would orphan
+       the mod in every existing modlist and turn an update into a different mod. Before first
+       publish it costs nothing. That window is now closed: do not rename this again.
+       (Note for editors: XML comments may not contain a double hyphen. Writing one here makes
+       About.xml unparseable, and RimWorld then skips the mod entirely.) -->
+  <packageId>kalas.wealthtooltips</packageId>
+  <!-- "Wealth Readout" read as though the mod replaces or adds a readout panel. It does neither:
+       it only rewrites tooltip text on vanilla's existing panel (HANDOVER rule 2). -->
+  <name>Wealth Tooltips</name>
   <author>kalas</author>
   <modVersion>1.0.0</modVersion>
   <!-- 1.6 only, and LoadFolders.xml must say the same. supportedVersions is what actually gates

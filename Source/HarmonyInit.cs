@@ -27,7 +27,7 @@ namespace WealthReadout
             // the player would keep seeing the old language until they restart the game.
             //
             // Resolve keys at call time instead -- see TooltipText.
-            var harmony = new Harmony("kalas.wealthreadout");
+            var harmony = new Harmony("kalas.wealthtooltips");
             harmony.PatchAll(Assembly.GetExecutingAssembly());
             Log.Message("[Wealth Readout] Patches applied.");
         }
