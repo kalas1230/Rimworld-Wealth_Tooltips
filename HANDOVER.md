@@ -340,11 +340,24 @@ So the empty-log rule has a second cause beyond startup timing: **check Player.l
 Publishing sequence agreed 2026-09-02. Do these in order: several later steps depend on
 artefacts the earlier ones produce.
 
-1. **User reviews the code.** Nothing has been reviewed by a human yet. The working tree is also
-   still uncommitted at the time of writing: the `StalenessTicks` measurement, four closed open
-   items, the publish scaffolding and the packageId rename. Commit before publishing so the
-   upload corresponds to a commit someone can check out; `build-release.ps1` warns when it does
-   not, and that warning is currently firing.
+1. **User reviews the code. — DONE 2026-09-02.** Reviewed by the owner, and the tree is committed.
+
+   The working tree was uncommitted when this step was written; it no longer is. Six commits
+   landed: the publish scaffolding, the packageId rename, the `StalenessTicks` measurement, the
+   debug-harness removal, this document, and the staging script's stale harness pointer. The
+   upload now corresponds to a commit someone can check out, so `build-release.ps1`'s
+   dirty-tree warning is silent.
+
+   Two changes to the repo itself came with it, and they are worth knowing before you push:
+
+   - **The remote exists**: `origin` is `https://github.com/kalas1230/Rimworld-Wealth_Tooltips.git`.
+     Nothing has been pushed yet. Step 3 below still stands — the *page* has to be created and
+     `<url>` added to `About.xml`.
+   - **Every commit SHA changed.** All 28 commits were rewritten to author and commit as
+     `kalas1230 <gokalpxd@gmail.com>`; twelve had been made under a different identity. Any SHA
+     written down elsewhere before 2026-09-02 is dead. The ones in this file were updated with
+     it. Identity is now pinned for every repo under `Desktop\Rimworld-mod` by an `includeIf`
+     in the global git config, so this cannot recur here.
 
 2. **Run a last in-game test.** Every in-game verification in this file was performed under the
    old `kalas.wealthreadout` packageId and the old Harmony instance id. Both were renamed on
@@ -399,6 +412,21 @@ artefacts the earlier ones produce.
    ```
 
    Point the Steam uploader at `Release\Wealth Tooltips\`, never at the repo root.
+
+   **Run once on 2026-09-02, and it failed as it should.** File set clean — 6 staged, 6
+   expected, nothing missing, nothing extra, no dev content leaked. One file stale:
+   `Assemblies\WealthReadout.dll`, staged at 24,064 bytes against a freshly built 10,752. That
+   drop is the debug harness coming out, so the staged copy is a pre-removal build carrying all
+   eight debug actions — exactly the "indefinite shelf life" failure this check exists for.
+
+   **Do not restage yet.** The obvious response is the `-Build -Zip` the script suggests, and
+   it is premature: `About.xml` has no `<url>` element until step 3, and that file ships, so
+   anything staged now goes stale the moment the link is added. Restage after steps 3 and 4,
+   then re-run this and expect green.
+
+   One cosmetic artifact: the check's header reads `from commit 79ee0f7`, a SHA that no longer
+   exists after the authorship rewrite. It is recorded staging metadata and regenerates on the
+   next stage. Nothing to fix.
 
 6. **Create the Steam page and publish.** After the first successful upload RimWorld writes
    `About/PublishedFileId.txt`. **Commit that file and never delete it.** It is what binds this
