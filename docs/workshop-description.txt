@@ -13,9 +13,9 @@ Hover a row in the resource readout. See what it is worth.
 
 The tooltip adds three things: the item or category's value in silver, its share of your colony's
 total wealth, and how much of it is stored versus sitting elsewhere; on the ground, in pawn
-inventories, inside containers.
+inventories.
 
-Wealth drives raid size, and the readout alone will not tell you which pile is doing the damage. 
+Wealth drives raid size, and the readout alone will not tell you which pile is doing the damage.
 There are better mods suited for this task if this is what you are looking for.
 This mod puts the answer where you are already looking, without opening a window.
 
@@ -25,6 +25,5 @@ is vanilla's own.
 Safe to add to any save and safe to remove from any save: the mod writes nothing into your save
 file. Works in both the categorized and simple readout modes. Requires Harmony.
 
-Source, and where bug reports go: https://github.com/kalas1230/Rimworld-Wealth_Tooltips — please
-open an issue there with your RimWorld version, your mod list, and what you expected versus what
-happened.
+Source, and where bug reports go: [url=https://github.com/kalas1230/Rimworld-Wealth_Tooltips]Github Link[/url]
+Check out my other mod: [url=https://steamcommunity.com/sharedfiles/filedetails/?id=3782564554]Varied Pawns[/url]

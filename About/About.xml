@@ -29,7 +29,7 @@
        deliberately, or decide per edit which of them it belongs in. -->
   <description>Hover a row in the resource readout. See what it is worth.
 
-The tooltip adds three things: the item or category's value in silver, its share of your colony's total wealth, and how much of it is stored versus sitting elsewhere; on the ground, in pawn inventories, inside containers.</description>
+The tooltip adds three things: the item or category's value in silver, its share of your colony's total wealth, and how much of it is stored versus sitting elsewhere; on the ground, in pawn inventories.</description>
   <modDependencies>
     <li>
       <packageId>brrainz.harmony</packageId>
