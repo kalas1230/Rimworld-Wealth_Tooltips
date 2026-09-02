@@ -12,6 +12,11 @@
        it only rewrites tooltip text on vanilla's existing panel (HANDOVER rule 2). -->
   <name>Wealth Tooltips</name>
   <author>kalas</author>
+  <!-- RimWorld renders this as a clickable link in the mod info panel. It is the only path back
+       to source and issues for a player who installed from the zip or from a modpack, where the
+       Workshop description is never seen. The same URL is repeated at the end of the Workshop
+       description, because mod managers and modpack listings show the text and not this field. -->
+  <url>https://github.com/kalas1230/Rimworld-Wealth_Tooltips</url>
   <modVersion>1.0.0</modVersion>
   <!-- 1.6 only, and LoadFolders.xml must say the same. supportedVersions is what actually gates
        loading; claiming a version this mod has never been run on is worse than not claiming it. -->

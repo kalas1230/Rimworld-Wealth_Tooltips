@@ -24,3 +24,7 @@ is vanilla's own.
 
 Safe to add to any save and safe to remove from any save: the mod writes nothing into your save
 file. Works in both the categorized and simple readout modes. Requires Harmony.
+
+Source, and where bug reports go: https://github.com/kalas1230/Rimworld-Wealth_Tooltips — please
+open an issue there with your RimWorld version, your mod list, and what you expected versus what
+happened.
