@@ -15,14 +15,16 @@ namespace WealthReadout
         // Not configurable, by design: the mod ships no settings page. A bad value here is a patch,
         // not a user-side workaround, which is why profiling it is a release gate.
         //
-        // Set to 5000 provisionally -- the conservative end of the plan's decision rule, matching
-        // WealthWatcher.MinCountInterval so our rebuild is never more frequent than the same pass
-        // vanilla already runs. NOT yet backed by a measurement: the "Profile index rebuild" debug
-        // action has not been run on a heavy map. Once it has, lower this to 1000 if the rebuild
-        // comes in under ~5 ms, or to 2500 at 5-15 ms, and replace this note with the figure.
+        // Measured 2026-09-02, not guessed. "Profile index rebuild" on the owner's heavy colony
+        // (250x250 -- the largest vanilla map size -- at 1,099,095 total wealth, 58 active mods
+        // including Combat Extended, Adaptive Storage and Gravship Storage) reported 10.94 and
+        // 12.16 ms/run over 20 runs each. The plan's rule maps 5-15 ms to 2500 ticks, and both
+        // samples sit well inside that band rather than near either boundary.
         //
-        // Cost of erring high: a hovered tooltip can report numbers up to 5000 ticks stale.
-        private const int StalenessTicks = 5000;
+        // Cost of erring high: a hovered tooltip can report numbers up to StalenessTicks stale.
+        // At 2500 that is half of WealthWatcher.MinCountInterval, so a rebuild can still never
+        // be more than twice as frequent as the pass vanilla already runs every 5000 ticks.
+        private const int StalenessTicks = 2500;
 
         private static Map cachedMap;
         private static int cachedTick = -99999;
